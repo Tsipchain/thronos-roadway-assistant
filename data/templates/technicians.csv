@@ -1,0 +1,2 @@
+companyName,email,phone,name,walletAddress,vehiclePlate,latitude,longitude,coverageRadiusKm,specialties,inventoryNote,isOnline
+Battery SOS Athens,tech.athens.1@example.com,+306900000001,George Battery,0x0000000000000000000000000000000000000001,SOS-1001,37.9838,23.7275,15,BATTERY_REPLACEMENT|BATTERY_CHARGE|TIRE_CHANGE,"AGM 70Ah; EFB 60Ah; LeadAcid 45/55/74Ah; jack; compressor",true

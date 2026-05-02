@@ -1,0 +1,4 @@
+[
+  "function reward(address to,uint256 amount,string calldata reason) external",
+  "event Rewarded(address indexed to,uint256 amount,string reason)"
+]

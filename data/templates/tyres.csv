@@ -1,0 +1,3 @@
+sku,brand,model,size,season,loadIndex,speedIndex,warrantyMonths,retailPriceEur,partnerCostEur,platformFeeEur,stockNote,isActive
+TYR-2055516-AS,DemoTyre,AllSeason 205/55R16,205/55R16,all-season,91,V,12,78,55,8,Common compact size,true
+TYR-1956515-AS,DemoTyre,AllSeason 195/65R15,195/65R15,all-season,91,H,12,68,48,7,Common city size,true

@@ -1,0 +1,2 @@
+companyName,name,country,city,centerLatitude,centerLongitude,radiusKm,serviceTypes,slaMinutes,isActive
+Battery SOS Athens,Athens Center,GR,Athens,37.9838,23.7275,15,BATTERY_REPLACEMENT|BATTERY_CHARGE|TIRE_CHANGE|TIRE_REPAIR|DIAGNOSIS,30,true

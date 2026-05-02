@@ -1,0 +1,9 @@
+[
+  "function createEscrow(bytes32 requestId,address technician) external payable",
+  "function completeEscrow(bytes32 requestId) external",
+  "function refundEscrow(bytes32 requestId) external",
+  "function escrows(bytes32 requestId) external view returns (address customer,address technician,uint256 amount,uint8 status)",
+  "event EscrowCreated(bytes32 indexed requestId,address indexed customer,address indexed technician,uint256 amount)",
+  "event EscrowCompleted(bytes32 indexed requestId,address indexed technician,uint256 amount)",
+  "event EscrowRefunded(bytes32 indexed requestId,address indexed customer,uint256 amount)"
+]

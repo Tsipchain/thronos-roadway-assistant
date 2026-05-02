@@ -1,0 +1,4 @@
+sku,brand,model,technology,voltage,ah,cca,lengthMm,widthMm,heightMm,polarity,warrantyMonths,retailPriceEur,partnerCostEur,platformFeeEur,stockNote,isActive
+BAT-AGM-70-760,DemoBatt,AGM 70Ah 760A,AGM,12,70,760,278,175,190,R+,24,145,105,12,Core urban stock,true
+BAT-EFB-60-640,DemoBatt,EFB 60Ah 640A,EFB,12,60,640,242,175,190,R+,24,115,82,10,Start-stop stock,true
+BAT-LA-55-480,DemoBatt,Lead Acid 55Ah 480A,LeadAcid,12,55,480,242,175,190,R+,18,85,58,8,Standard stock,true

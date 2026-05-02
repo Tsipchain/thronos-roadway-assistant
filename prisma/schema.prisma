@@ -1,0 +1,398 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CUSTOMER
+  TECHNICIAN
+  ADMIN
+}
+
+enum RequestStatus {
+  PENDING
+  ACCEPTED
+  EN_ROUTE
+  ARRIVED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CARD
+  CRYPTO
+  CASH
+}
+
+enum PaymentStatus {
+  PENDING
+  ESCROWED
+  COMPLETED
+  REFUNDED
+  FAILED
+}
+
+enum ServiceType {
+  BATTERY_REPLACEMENT
+  BATTERY_CHARGE
+  TIRE_CHANGE
+  TIRE_REPAIR
+  DIAGNOSIS
+}
+
+model User {
+  id             String    @id @default(cuid())
+  email          String    @unique
+  phone          String    @unique
+  passwordHash   String
+  name           String
+  role           UserRole  @default(CUSTOMER)
+  avatarUrl      String?
+  walletAddress  String?   @unique
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // Customer relations
+  vehicles       Vehicle[]
+  requests       ServiceRequest[]  @relation("CustomerRequests")
+  reviews        Review[]          @relation("CustomerReviews")
+  subscriptions  Subscription[]
+
+  // Technician relations
+  technicianProfile  TechnicianProfile?
+  assignedRequests   ServiceRequest[]  @relation("TechnicianRequests")
+  receivedReviews    Review[]          @relation("TechnicianReviews")
+  dispatchAttempts  DispatchAttempt[] @relation("TechnicianDispatchAttempts")
+
+  // Rewards
+  rewardBalance  Float     @default(0)
+  rewardHistory  RewardEvent[]
+
+  // Push subscription
+  pushSubscriptions PushSubscription[]
+}
+
+model TechnicianProfile {
+  id              String    @id @default(cuid())
+  userId          String    @unique
+  user            User      @relation(fields: [userId], references: [id])
+  isOnline        Boolean   @default(false)
+  isAvailable     Boolean   @default(true)
+  latitude        Float?
+  longitude       Float?
+  lastLocationAt  DateTime?
+  rating          Float     @default(5.0)
+  totalJobs       Int       @default(0)
+  specialties     ServiceType[]
+  coverageRadiusKm Float   @default(15)
+  vehiclePlate    String?
+  inventoryNote   String?
+  companyId       String?
+  company         PartnerCompany? @relation(fields: [companyId], references: [id])
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model Vehicle {
+  id             String    @id @default(cuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id])
+  licensePlate   String
+  make           String
+  model          String
+  year           Int
+  engineType     String?
+  batteryType    String?
+  batteryAh      Int?
+  tireSize       String?
+  vin            String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  requests       ServiceRequest[]
+  serviceRecords ServiceRecord[]
+
+  @@unique([userId, licensePlate])
+}
+
+model ServiceRequest {
+  id              String         @id @default(cuid())
+  customerId      String
+  customer        User           @relation("CustomerRequests", fields: [customerId], references: [id])
+  technicianId    String?
+  technician      User?          @relation("TechnicianRequests", fields: [technicianId], references: [id])
+  vehicleId       String
+  vehicle         Vehicle        @relation(fields: [vehicleId], references: [id])
+
+  serviceType     ServiceType
+  status          RequestStatus  @default(PENDING)
+  description     String?
+  symptoms        String[]
+
+  // Location
+  latitude        Float
+  longitude       Float
+  address         String?
+
+  // Timing
+  createdAt       DateTime       @default(now())
+  acceptedAt      DateTime?
+  arrivedAt       DateTime?
+  completedAt     DateTime?
+  cancelledAt     DateTime?
+  estimatedMinutes Int?
+
+  // Pricing
+  estimatedPrice  Float?
+  finalPrice      Float?
+
+  // Payment
+  payment         Payment?
+
+  // Service record
+  serviceRecord   ServiceRecord?
+
+  // Review
+  review          Review?
+
+  // Dispatch history
+  dispatchAttempts DispatchAttempt[]
+
+  // Blockchain / attestations
+  txHash             String?
+  escrowTxHash       String?
+  completionTxHash   String?
+  attestationHash    String?
+  attestationTxId    String?
+}
+
+model Payment {
+  id              String        @id @default(cuid())
+  requestId       String        @unique
+  request         ServiceRequest @relation(fields: [requestId], references: [id])
+  method          PaymentMethod
+  status          PaymentStatus @default(PENDING)
+  amount          Float
+  currency        String        @default("EUR")
+  stripePaymentId String?
+  cryptoTxHash    String?
+  escrowAddress   String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+model ServiceRecord {
+  id              String         @id @default(cuid())
+  requestId       String         @unique
+  request         ServiceRequest @relation(fields: [requestId], references: [id])
+  vehicleId       String
+  vehicle         Vehicle        @relation(fields: [vehicleId], references: [id])
+  serviceType     ServiceType
+  description     String
+  partsUsed       String[]
+  technicianNotes String?
+  blockchainTxHash String?
+  attestationHash String?
+  attestationTxId String?
+  createdAt       DateTime       @default(now())
+}
+
+model Review {
+  id              String         @id @default(cuid())
+  requestId       String         @unique
+  request         ServiceRequest @relation(fields: [requestId], references: [id])
+  customerId      String
+  customer        User           @relation("CustomerReviews", fields: [customerId], references: [id])
+  technicianId    String
+  technician      User           @relation("TechnicianReviews", fields: [technicianId], references: [id])
+  rating          Int
+  comment         String?
+  createdAt       DateTime       @default(now())
+}
+
+model Subscription {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  plan            String    @default("annual")
+  priceEur        Float     @default(30)
+  isActive        Boolean   @default(true)
+  startDate       DateTime  @default(now())
+  endDate         DateTime
+  stripeSubId     String?
+  createdAt       DateTime  @default(now())
+}
+
+model RewardEvent {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  amount          Float
+  reason          String
+  txHash          String?
+  createdAt       DateTime  @default(now())
+}
+
+model PushSubscription {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  endpoint        String
+  p256dh          String
+  auth            String
+  createdAt       DateTime  @default(now())
+
+  @@unique([userId, endpoint])
+}
+
+model PricingRule {
+  id              String      @id @default(cuid())
+  serviceType     ServiceType
+  basePrice       Float
+  perKmSurcharge  Float       @default(0.5)
+  nightSurcharge  Float       @default(10)
+  weekendSurcharge Float      @default(5)
+  isActive        Boolean     @default(true)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@unique([serviceType])
+}
+
+model PartnerCompany {
+  id              String    @id @default(cuid())
+  name            String    @unique
+  vatNumber       String?
+  phone           String?
+  email           String?
+  billingAddress  String?
+  status          String    @default("ACTIVE")
+  technicians     TechnicianProfile[]
+  serviceAreas    ServiceArea[]
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model ServiceArea {
+  id              String    @id @default(cuid())
+  companyId       String?
+  company         PartnerCompany? @relation(fields: [companyId], references: [id])
+  name            String
+  country         String    @default("GR")
+  city            String
+  centerLatitude  Float
+  centerLongitude Float
+  radiusKm        Float     @default(15)
+  serviceTypes    ServiceType[]
+  slaMinutes      Int       @default(30)
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([name, city])
+  @@index([city, isActive])
+}
+
+model BatteryCatalogItem {
+  id              String    @id @default(cuid())
+  sku             String    @unique
+  brand           String
+  model           String
+  technology      String    // AGM, EFB, LeadAcid, GEL
+  voltage         Int       @default(12)
+  ah              Int
+  cca             Int?
+  lengthMm        Int?
+  widthMm         Int?
+  heightMm        Int?
+  polarity        String?
+  warrantyMonths  Int       @default(24)
+  retailPriceEur  Float
+  partnerCostEur  Float?
+  platformFeeEur  Float     @default(0)
+  stockNote       String?
+  isActive        Boolean   @default(true)
+  fitments        VehicleFitmentRule[]
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model TyreCatalogItem {
+  id              String    @id @default(cuid())
+  sku             String    @unique
+  brand           String
+  model           String
+  size            String
+  season          String    // summer, winter, all-season
+  loadIndex       String?
+  speedIndex      String?
+  warrantyMonths  Int       @default(12)
+  retailPriceEur  Float
+  partnerCostEur  Float?
+  platformFeeEur  Float     @default(0)
+  stockNote       String?
+  isActive        Boolean   @default(true)
+  fitments        VehicleFitmentRule[]
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model VehicleFitmentRule {
+  id              String    @id @default(cuid())
+  sourceKey       String?   @unique
+  make            String
+  model           String
+  yearFrom        Int?
+  yearTo          Int?
+  engineType      String?
+  batterySku      String?
+  batteryItem     BatteryCatalogItem? @relation(fields: [batterySku], references: [sku])
+  tyreSku         String?
+  tyreItem        TyreCatalogItem? @relation(fields: [tyreSku], references: [sku])
+  tyreSize        String?
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([make, model])
+  @@index([batterySku])
+  @@index([tyreSku])
+}
+
+model DispatchAttempt {
+  id                String         @id @default(cuid())
+  requestId         String
+  request           ServiceRequest @relation(fields: [requestId], references: [id])
+  technicianId      String
+  technician        User           @relation("TechnicianDispatchAttempts", fields: [technicianId], references: [id])
+  radiusKm          Float
+  distanceKm        Float
+  estimatedMinutes  Int
+  status            String         @default("NOTIFIED") // NOTIFIED, ACCEPTED, DECLINED, EXPIRED
+  notifiedAt        DateTime       @default(now())
+  respondedAt       DateTime?
+
+  @@index([requestId])
+  @@index([technicianId, status])
+}
+
+model AttestationRecord {
+  id              String    @id @default(cuid())
+  type            String
+  subjectId       String
+  mode            String    // sha256, evm, both
+  hash            String
+  txId            String?
+  txHash          String?
+  payloadJson     Json
+  rawJson         Json?
+  createdAt       DateTime  @default(now())
+
+  @@index([subjectId])
+  @@index([hash])
+}

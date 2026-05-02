@@ -1,0 +1,5 @@
+[
+  "function recordService(bytes32 requestId,bytes32 vehicleHash,uint8 serviceType,string calldata metadataUri) external",
+  "function records(bytes32 requestId) external view returns (bytes32 requestId,bytes32 vehicleHash,uint8 serviceType,string metadataUri,uint256 createdAt)",
+  "event ServiceRecorded(bytes32 indexed requestId,bytes32 indexed vehicleHash,uint8 serviceType,string metadataUri)"
+]

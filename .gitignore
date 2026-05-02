@@ -1,0 +1,16 @@
+node_modules
+.next
+out
+dist
+coverage
+.env
+.env.local
+.env.production
+.env*.local
+.DS_Store
+prisma/dev.db
+cache
+artifacts
+deployments/*.local.json
+data/import/*.private.csv
+*.log
