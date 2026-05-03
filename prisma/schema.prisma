@@ -53,6 +53,23 @@ enum TeamMemberRole {
   MANAGER
 }
 
+enum P2POrderStatus {
+  QUOTE       // price locked, awaiting EUR payment
+  PAID        // EUR received, BTC send pending
+  SENT        // BTC sent on-chain
+  COMPLETED   // confirmed
+  EXPIRED     // quote expired before payment
+  CANCELLED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
 model User {
   id            String         @id @default(cuid())
   email         String         @unique
@@ -78,6 +95,7 @@ model User {
   rewardBalance     Float             @default(0)
   rewardHistory     RewardEvent[]
   pushSubscriptions PushSubscription[]
+  p2pOrders         P2POrder[]
 }
 
 model TechnicianProfile {
@@ -273,16 +291,16 @@ model PartnerCompany {
   planActiveUntil DateTime?
   status          String    @default("ACTIVE")
 
-  // Thronos Chain integration
-  thrWalletAddress    String?   @unique
-  btcPledgeAddress    String?
-  btcPledgeVerified   Float     @default(0)   // confirmed BTC pledged on chain
-  pledgeVerifiedAt    DateTime?
-  enterpriseEnabled   Boolean   @default(false)
-  thrRewardPoolBalance Float    @default(0)   // THR held for employee rewards
+  // Thronos Chain
+  thrWalletAddress     String?  @unique
+  btcPledgeAddress     String?
+  btcPledgeVerified    Float    @default(0)
+  pledgeVerifiedAt     DateTime?
+  enterpriseEnabled    Boolean  @default(false)
+  thrRewardPoolBalance Float    @default(0)
 
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   technicians  TechnicianProfile[]
   serviceAreas ServiceArea[]
@@ -291,9 +309,10 @@ model PartnerCompany {
   pricingRules PricingRule[]
   teamMembers  TenantTeamMember[]
   rewardTxs    TenantRewardTx[]
+  p2pOrders    P2POrder[]
+  invoices     TenantInvoice[]
 }
 
-// Employees / contractors / sub-partners with THR wallets
 model TenantTeamMember {
   id              String         @id @default(cuid())
   tenantId        String
@@ -302,7 +321,7 @@ model TenantTeamMember {
   phone           String?
   email           String?
   role            TeamMemberRole @default(EMPLOYEE)
-  thrAddress      String?        @unique  // their THR wallet on the chain
+  thrAddress      String?        @unique
   thrBalance      Float          @default(0)
   totalEarned     Float          @default(0)
   isActive        Boolean        @default(true)
@@ -317,21 +336,84 @@ model TenantTeamMember {
   @@index([thrAddress])
 }
 
-// On-chain reward transactions per team member
 model TenantRewardTx {
-  id          String           @id @default(cuid())
-  tenantId    String
-  tenant      PartnerCompany   @relation(fields: [tenantId], references: [id])
-  memberId    String
-  member      TenantTeamMember @relation(fields: [memberId], references: [id])
-  amount      Float
-  reason      String
-  txHash      String?          // Thronos chain tx hash
-  status      String           @default("PENDING") // PENDING, CONFIRMED, FAILED
-  createdAt   DateTime         @default(now())
+  id        String           @id @default(cuid())
+  tenantId  String
+  tenant    PartnerCompany   @relation(fields: [tenantId], references: [id])
+  memberId  String
+  member    TenantTeamMember @relation(fields: [memberId], references: [id])
+  amount    Float
+  reason    String
+  txHash    String?
+  status    String           @default("PENDING")
+  createdAt DateTime         @default(now())
 
   @@index([tenantId, createdAt])
   @@index([memberId])
+}
+
+// P2P BTC desk — partner buys BTC from platform hot wallet, pays EUR
+model P2POrder {
+  id              String        @id @default(cuid())
+  tenantId        String?
+  tenant          PartnerCompany? @relation(fields: [tenantId], references: [id])
+  userId          String
+  user            User          @relation(fields: [userId], references: [id])
+
+  // Quote
+  btcAmount       Float         // BTC to receive
+  eurAmount       Float         // EUR to pay
+  rateEurPerBtc   Float         // locked rate
+  feeEur          Float         @default(0)  // platform spread/fee
+  quoteExpiresAt  DateTime
+
+  // Payment
+  status          P2POrderStatus @default(QUOTE)
+  paymentRef      String?       // bank transfer ref or Stripe PI id
+  paymentMethod   String        @default("bank") // bank | card
+  paidAt          DateTime?
+
+  // BTC delivery
+  destinationBtc  String        // partner's BTC address
+  btcTxHash       String?       // on-chain send tx
+  sentAt          DateTime?
+  confirmedAt     DateTime?
+
+  exchangeOrderId String?       // ref from exchange
+  notes           String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([tenantId, status])
+  @@index([status, quoteExpiresAt])
+}
+
+// Fiat invoices for platform subscription / services (paid by tenant in EUR)
+model TenantInvoice {
+  id            String        @id @default(cuid())
+  tenantId      String
+  tenant        PartnerCompany @relation(fields: [tenantId], references: [id])
+
+  number        String        @unique  // INV-2025-001
+  description   String
+  amountEur     Float
+  vatPct        Float         @default(24)
+  totalEur      Float
+
+  status        InvoiceStatus @default(DRAFT)
+  dueDate       DateTime
+  paidAt        DateTime?
+  stripePaymentId String?
+  paymentMethod String?       // stripe | bank
+  bankRef       String?       // bank transfer ref
+
+  lineItems     Json          // [{ description, qty, unitPrice }]
+  notes         String?
+
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([tenantId, status])
 }
 
 model ServiceArea {
