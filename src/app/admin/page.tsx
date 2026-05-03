@@ -12,7 +12,7 @@ export default async function SuperAdminPage() {
     redirect("/login");
   }
 
-  const [tenants, totalJobs, activeJobs] = await Promise.all([
+  const [tenants, totalJobs, activeJobs, pendingP2P, pendingInvoices] = await Promise.all([
     prisma.partnerCompany.findMany({
       include: {
         _count: { select: { technicians: true, requests: true, users: true } },
@@ -23,6 +23,8 @@ export default async function SuperAdminPage() {
     prisma.serviceRequest.count({
       where: { status: { in: ["PENDING", "ACCEPTED", "EN_ROUTE", "IN_PROGRESS"] } },
     }),
+    prisma.p2POrder.count({ where: { status: "QUOTE" } }),
+    prisma.tenantInvoice.count({ where: { status: { in: ["SENT", "OVERDUE"] } } }),
   ]);
 
   const systemStats = [
@@ -63,6 +65,49 @@ export default async function SuperAdminPage() {
               <div className="text-slate-400 text-sm mt-1">{s.label}</div>
             </div>
           ))}
+        </div>
+
+        {/* Action Nav Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+          <Link
+            href="/admin/p2p"
+            className="bg-amber-500/10 border border-amber-500/30 hover:border-amber-400/60 rounded-2xl p-5 transition group"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-amber-400 font-semibold text-base mb-1">P2P BTC Orders</div>
+                <div className="text-slate-400 text-sm">Διαχείριση αγορών BTC · Επιβεβαίωση πληρωμών</div>
+              </div>
+              <div className="flex items-center gap-2">
+                {pendingP2P > 0 && (
+                  <span className="bg-amber-500 text-black text-xs font-bold px-2.5 py-1 rounded-full">
+                    {pendingP2P} εκκρεμή
+                  </span>
+                )}
+                <span className="text-slate-500 group-hover:text-slate-300 transition text-xl">→</span>
+              </div>
+            </div>
+          </Link>
+
+          <Link
+            href="/admin/invoices"
+            className="bg-blue-500/10 border border-blue-500/30 hover:border-blue-400/60 rounded-2xl p-5 transition group"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-blue-400 font-semibold text-base mb-1">Τιμολόγια Tenants</div>
+                <div className="text-slate-400 text-sm">Fiat χρεώσεις · ΦΠΑ 24% · Δημιουργία τιμολογίων</div>
+              </div>
+              <div className="flex items-center gap-2">
+                {pendingInvoices > 0 && (
+                  <span className="bg-blue-500 text-white text-xs font-bold px-2.5 py-1 rounded-full">
+                    {pendingInvoices} ανοιχτά
+                  </span>
+                )}
+                <span className="text-slate-500 group-hover:text-slate-300 transition text-xl">→</span>
+              </div>
+            </div>
+          </Link>
         </div>
 
         {/* Tenants Table */}
