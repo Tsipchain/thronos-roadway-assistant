@@ -46,19 +46,26 @@ enum ServiceType {
   DIAGNOSIS
 }
 
+enum TeamMemberRole {
+  EMPLOYEE
+  CONTRACTOR
+  PARTNER
+  MANAGER
+}
+
 model User {
-  id            String   @id @default(cuid())
-  email         String   @unique
-  phone         String   @unique
+  id            String         @id @default(cuid())
+  email         String         @unique
+  phone         String         @unique
   passwordHash  String
   name          String
-  role          UserRole @default(CUSTOMER)
+  role          UserRole       @default(CUSTOMER)
   avatarUrl     String?
-  walletAddress String?  @unique
+  walletAddress String?        @unique
   tenantId      String?
   tenant        PartnerCompany? @relation("TenantUsers", fields: [tenantId], references: [id])
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 
   vehicles          Vehicle[]
   requests          ServiceRequest[]  @relation("CustomerRequests")
@@ -117,13 +124,13 @@ model Vehicle {
 }
 
 model ServiceRequest {
-  id           String         @id @default(cuid())
+  id           String          @id @default(cuid())
   customerId   String
-  customer     User           @relation("CustomerRequests", fields: [customerId], references: [id])
+  customer     User            @relation("CustomerRequests", fields: [customerId], references: [id])
   technicianId String?
-  technician   User?          @relation("TechnicianRequests", fields: [technicianId], references: [id])
+  technician   User?           @relation("TechnicianRequests", fields: [technicianId], references: [id])
   vehicleId    String
-  vehicle      Vehicle        @relation(fields: [vehicleId], references: [id])
+  vehicle      Vehicle         @relation(fields: [vehicleId], references: [id])
   tenantId     String?
   tenant       PartnerCompany? @relation("TenantRequests", fields: [tenantId], references: [id])
 
@@ -203,16 +210,16 @@ model Review {
 }
 
 model Subscription {
-  id         String   @id @default(cuid())
-  userId     String
-  user       User     @relation(fields: [userId], references: [id])
-  plan       String   @default("annual")
-  priceEur   Float    @default(30)
-  isActive   Boolean  @default(true)
-  startDate  DateTime @default(now())
-  endDate    DateTime
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  plan        String   @default("annual")
+  priceEur    Float    @default(30)
+  isActive    Boolean  @default(true)
+  startDate   DateTime @default(now())
+  endDate     DateTime
   stripeSubId String?
-  createdAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
 }
 
 model RewardEvent {
@@ -265,14 +272,66 @@ model PartnerCompany {
   plan            String    @default("starter")
   planActiveUntil DateTime?
   status          String    @default("ACTIVE")
+
+  // Thronos Chain integration
+  thrWalletAddress    String?   @unique
+  btcPledgeAddress    String?
+  btcPledgeVerified   Float     @default(0)   // confirmed BTC pledged on chain
+  pledgeVerifiedAt    DateTime?
+  enterpriseEnabled   Boolean   @default(false)
+  thrRewardPoolBalance Float    @default(0)   // THR held for employee rewards
+
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
   technicians  TechnicianProfile[]
   serviceAreas ServiceArea[]
-  users        User[]           @relation("TenantUsers")
-  requests     ServiceRequest[] @relation("TenantRequests")
+  users        User[]            @relation("TenantUsers")
+  requests     ServiceRequest[]  @relation("TenantRequests")
   pricingRules PricingRule[]
+  teamMembers  TenantTeamMember[]
+  rewardTxs    TenantRewardTx[]
+}
+
+// Employees / contractors / sub-partners with THR wallets
+model TenantTeamMember {
+  id              String         @id @default(cuid())
+  tenantId        String
+  tenant          PartnerCompany @relation(fields: [tenantId], references: [id])
+  name            String
+  phone           String?
+  email           String?
+  role            TeamMemberRole @default(EMPLOYEE)
+  thrAddress      String?        @unique  // their THR wallet on the chain
+  thrBalance      Float          @default(0)
+  totalEarned     Float          @default(0)
+  isActive        Boolean        @default(true)
+  walletCreatedAt DateTime?
+  notes           String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  rewardTxs TenantRewardTx[]
+
+  @@index([tenantId])
+  @@index([thrAddress])
+}
+
+// On-chain reward transactions per team member
+model TenantRewardTx {
+  id          String           @id @default(cuid())
+  tenantId    String
+  tenant      PartnerCompany   @relation(fields: [tenantId], references: [id])
+  memberId    String
+  member      TenantTeamMember @relation(fields: [memberId], references: [id])
+  amount      Float
+  reason      String
+  txHash      String?          // Thronos chain tx hash
+  status      String           @default("PENDING") // PENDING, CONFIRMED, FAILED
+  createdAt   DateTime         @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([memberId])
 }
 
 model ServiceArea {
@@ -350,7 +409,7 @@ model VehicleFitmentRule {
   batterySku  String?
   batteryItem BatteryCatalogItem? @relation(fields: [batterySku], references: [sku])
   tyreSku     String?
-  tyreItem    TyreCatalogItem?   @relation(fields: [tyreSku], references: [sku])
+  tyreItem    TyreCatalogItem?    @relation(fields: [tyreSku], references: [sku])
   tyreSize    String?
   notes       String?
   createdAt   DateTime            @default(now())

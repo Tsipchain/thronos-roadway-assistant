@@ -25,14 +25,9 @@ const SERVICE_LABELS: Record<string, string> = {
   DIAGNOSIS:           "Διάγνωση",
 };
 
-export default async function TenantAdminPage({
-  params,
-}: {
-  params: { slug: string };
-}) {
+export default async function TenantAdminPage({ params }: { params: { slug: string } }) {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
-
   if (!canAccessTenant(session.user.role, session.user.tenantSlug, params.slug)) {
     redirect("/login");
   }
@@ -46,6 +41,7 @@ export default async function TenantAdminPage({
         include: { user: { select: { name: true, email: true, phone: true } } },
         orderBy: { isOnline: "desc" },
       },
+      _count: { select: { teamMembers: true } },
     },
   });
   if (!tenant) notFound();
@@ -85,37 +81,51 @@ export default async function TenantAdminPage({
             <div>
               <h1 className="text-2xl font-bold">{tenant.name}</h1>
               <p className="text-slate-400 text-sm">
-                Admin · {tenant.phone}{" "}
-                <span className="text-slate-600">· /t/{tenant.slug}</span>
+                Admin · {tenant.phone}
+                {tenant.enterpriseEnabled && (
+                  <span className="ml-2 text-purple-400 font-medium">⚡ Enterprise</span>
+                )}
               </p>
             </div>
           </div>
-          <div className="flex gap-3">
-            <Link
-              href={`/t/${params.slug}`}
-              target="_blank"
-              className="text-sm bg-white/5 border border-white/10 px-4 py-2 rounded-xl hover:bg-white/10 transition"
-            >
-              Σελίδα SOS ↗
+          <div className="flex flex-wrap gap-2">
+            <Link href={`/t/${params.slug}/admin/qr`}
+              className="text-sm bg-white/5 border border-white/10 px-4 py-2 rounded-xl hover:bg-white/10 transition">
+              📱 QR Code
+            </Link>
+            <Link href={`/t/${params.slug}/admin/team`}
+              className="text-sm bg-purple-600/20 border border-purple-500/30 px-4 py-2 rounded-xl hover:bg-purple-600/30 transition text-purple-300">
+              👥 Ομάδα {tenant._count.teamMembers > 0 && `(${tenant._count.teamMembers})`}
+            </Link>
+            <Link href={`/t/${params.slug}`} target="_blank"
+              className="text-sm bg-white/5 border border-white/10 px-4 py-2 rounded-xl hover:bg-white/10 transition">
+              SOS ↗
             </Link>
             {session.user.role === "SUPER_ADMIN" && (
-              <Link
-                href="/admin"
-                className="text-sm text-slate-400 hover:text-white transition"
-              >
-                ← Root Admin
-              </Link>
+              <Link href="/admin" className="text-sm text-slate-400 hover:text-white transition">← Root</Link>
             )}
           </div>
         </div>
 
+        {/* Enterprise CTA */}
+        {!tenant.enterpriseEnabled && (
+          <Link href={`/t/${params.slug}/admin/team`}
+            className="flex items-center gap-4 bg-purple-500/10 border border-purple-500/30 rounded-2xl p-4 mb-6 hover:bg-purple-500/15 transition">
+            <div className="text-3xl">🔒</div>
+            <div>
+              <div className="font-semibold text-purple-300">Ξεκλειδώστε Enterprise — THR Wallets & Rewards για την ομάδα σας</div>
+              <div className="text-sm text-slate-400 mt-0.5">Απαιτείται pledge ≥ 0.011 BTC στο Thronos Chain → Ρύθμιση →</div>
+            </div>
+          </Link>
+        )}
+
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           {[
-            { label: "Τεχνικοί Online", value: onlineTechs,                       color: "text-green-400" },
-            { label: "Ενεργά Jobs",     value: pendingJobs,                       color: "text-amber-400" },
-            { label: "Ολοκληρωμένα",   value: completedJobs,                     color: "text-blue-400" },
-            { label: "Περιοχές",       value: tenant.serviceAreas.length,        color: "text-purple-400" },
+            { label: "Τεχνικοί Online", value: onlineTechs,                color: "text-green-400" },
+            { label: "Ενεργά Jobs",     value: pendingJobs,                color: "text-amber-400" },
+            { label: "Ολοκληρωμένα",   value: completedJobs,              color: "text-blue-400" },
+            { label: "Περιοχές",       value: tenant.serviceAreas.length, color: "text-purple-400" },
           ].map((s) => (
             <div key={s.label} className="bg-white/5 border border-white/10 rounded-2xl p-5">
               <div className={`text-4xl font-bold ${s.color}`}>{s.value}</div>
@@ -125,7 +135,6 @@ export default async function TenantAdminPage({
         </div>
 
         <div className="grid md:grid-cols-3 gap-6 mb-6">
-
           {/* Technicians */}
           <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
             <div className="flex justify-between items-center mb-4">
@@ -139,20 +148,13 @@ export default async function TenantAdminPage({
                     <div className="text-sm font-medium truncate">{tech.user.name}</div>
                     <div className="text-xs text-slate-400 truncate">{tech.user.phone}</div>
                   </div>
-                  <span
-                    className={`shrink-0 text-xs px-2 py-1 rounded-full ${
-                      tech.isOnline
-                        ? "bg-green-500/20 text-green-300"
-                        : "bg-slate-500/20 text-slate-400"
-                    }`}
-                  >
+                  <span className={`shrink-0 text-xs px-2 py-1 rounded-full ${
+                    tech.isOnline ? "bg-green-500/20 text-green-300" : "bg-slate-500/20 text-slate-400"
+                  }`}>
                     {tech.isOnline ? "Online" : "Offline"}
                   </span>
                 </div>
               ))}
-              {tenant.technicians.length === 0 && (
-                <p className="text-slate-500 text-sm">Δεν υπάρχουν τεχνικοί.</p>
-              )}
             </div>
           </div>
 
@@ -162,9 +164,7 @@ export default async function TenantAdminPage({
             <div className="space-y-3">
               {tenant.pricingRules.map((p) => (
                 <div key={p.id} className="flex justify-between items-center">
-                  <span className="text-sm text-slate-300">
-                    {SERVICE_LABELS[p.serviceType] ?? p.serviceType}
-                  </span>
+                  <span className="text-sm text-slate-300">{SERVICE_LABELS[p.serviceType] ?? p.serviceType}</span>
                   <div className="text-right">
                     <span className="font-medium text-purple-300">{p.basePrice}€</span>
                     <span className="text-slate-500 text-xs block">+{p.nightSurcharge}€ νύχτα</span>
@@ -180,7 +180,7 @@ export default async function TenantAdminPage({
               <h2 className="font-semibold">Περιοχές</h2>
               <span className="text-xs text-slate-500">{tenant.serviceAreas.length} zones</span>
             </div>
-            <div className="space-y-2 max-h-56 overflow-y-auto pr-1 scrollbar-thin">
+            <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
               {tenant.serviceAreas.map((a) => (
                 <div key={a.id} className="flex justify-between text-sm">
                   <span className="text-slate-300 truncate">{a.name}</span>
@@ -201,7 +201,6 @@ export default async function TenantAdminPage({
             <div className="text-center py-10 text-slate-500">
               <div className="text-4xl mb-3">📋</div>
               <p>Δεν υπάρχουν jobs ακόμα.</p>
-              <p className="text-sm mt-1">Μοιραστείτε τον σύνδεσμο SOS με πελάτες.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -224,27 +223,16 @@ export default async function TenantAdminPage({
                         <div className="text-slate-500 text-xs">{j.customer.phone}</div>
                       </td>
                       <td className="py-3 font-mono text-slate-300">{j.vehicle.licensePlate}</td>
-                      <td className="py-3 text-slate-300">
-                        {SERVICE_LABELS[j.serviceType] ?? j.serviceType}
-                      </td>
-                      <td className="py-3 text-slate-400">
-                        {j.technician?.name ?? <span className="text-slate-600">—</span>}
-                      </td>
+                      <td className="py-3 text-slate-300">{SERVICE_LABELS[j.serviceType] ?? j.serviceType}</td>
+                      <td className="py-3 text-slate-400">{j.technician?.name ?? <span className="text-slate-600">—</span>}</td>
                       <td className="py-3">
-                        <span
-                          className={`text-xs px-2 py-1 rounded-full ${
-                            STATUS_COLORS[j.status] ?? "bg-white/10 text-white"
-                          }`}
-                        >
+                        <span className={`text-xs px-2 py-1 rounded-full ${STATUS_COLORS[j.status] ?? "bg-white/10"}` }>
                           {j.status}
                         </span>
                       </td>
                       <td className="py-3 text-slate-500 text-xs">
                         {new Date(j.createdAt).toLocaleDateString("el-GR", {
-                          day: "2-digit",
-                          month: "2-digit",
-                          hour: "2-digit",
-                          minute: "2-digit",
+                          day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
                         })}
                       </td>
                     </tr>
