@@ -54,11 +54,11 @@ enum TeamMemberRole {
 }
 
 enum P2POrderStatus {
-  QUOTE       // price locked, awaiting EUR payment
-  PAID        // EUR received, BTC send pending
-  SENT        // BTC sent on-chain
-  COMPLETED   // confirmed
-  EXPIRED     // quote expired before payment
+  QUOTE
+  PAID
+  SENT
+  COMPLETED
+  EXPIRED
   CANCELLED
 }
 
@@ -71,28 +71,28 @@ enum InvoiceStatus {
 }
 
 model User {
-  id            String         @id @default(cuid())
-  email         String         @unique
-  phone         String         @unique
+  id            String          @id @default(cuid())
+  email         String          @unique
+  phone         String          @unique
   passwordHash  String
   name          String
-  role          UserRole       @default(CUSTOMER)
+  role          UserRole        @default(CUSTOMER)
   avatarUrl     String?
-  walletAddress String?        @unique
+  walletAddress String?         @unique
   tenantId      String?
   tenant        PartnerCompany? @relation("TenantUsers", fields: [tenantId], references: [id])
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
 
   vehicles          Vehicle[]
-  requests          ServiceRequest[]  @relation("CustomerRequests")
-  reviews           Review[]          @relation("CustomerReviews")
+  requests          ServiceRequest[]   @relation("CustomerRequests")
+  reviews           Review[]           @relation("CustomerReviews")
   subscriptions     Subscription[]
   technicianProfile TechnicianProfile?
-  assignedRequests  ServiceRequest[]  @relation("TechnicianRequests")
-  receivedReviews   Review[]          @relation("TechnicianReviews")
-  dispatchAttempts  DispatchAttempt[] @relation("TechnicianDispatchAttempts")
-  rewardBalance     Float             @default(0)
+  assignedRequests  ServiceRequest[]   @relation("TechnicianRequests")
+  receivedReviews   Review[]           @relation("TechnicianReviews")
+  dispatchAttempts  DispatchAttempt[]  @relation("TechnicianDispatchAttempts")
+  rewardBalance     Float              @default(0)
   rewardHistory     RewardEvent[]
   pushSubscriptions PushSubscription[]
   p2pOrders         P2POrder[]
@@ -285,27 +285,31 @@ model PartnerCompany {
   logoUrl         String?
   vatNumber       String?
   phone           String?
-  email           String?
+  email           String?   @unique
   billingAddress  String?
   plan            String    @default("starter")
   planActiveUntil DateTime?
   status          String    @default("ACTIVE")
 
-  // Thronos Chain
-  thrWalletAddress     String?  @unique
-  btcPledgeAddress     String?
-  btcPledgeVerified    Float    @default(0)
-  pledgeVerifiedAt     DateTime?
-  enterpriseEnabled    Boolean  @default(false)
-  thrRewardPoolBalance Float    @default(0)
+  // Stripe (fiat EUR billing)
+  stripeCustomerId String?
+
+  // Thronos Chain — enterprise pledge
+  thrWalletAddress  String?   @unique  // THR address from /pledge_submit
+  btcPledgeAddress  String?            // BTC source address partner registered
+  btcPledgeVerified Float     @default(0)  // BTC amount confirmed on-chain
+  pledgeVerifiedAt  DateTime?
+  pledgeHash        String?            // sha256 hash from /pledge_submit
+  enterpriseEnabled Boolean   @default(false)
+  thrRewardPoolBalance Float   @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   technicians  TechnicianProfile[]
   serviceAreas ServiceArea[]
-  users        User[]            @relation("TenantUsers")
-  requests     ServiceRequest[]  @relation("TenantRequests")
+  users        User[]             @relation("TenantUsers")
+  requests     ServiceRequest[]   @relation("TenantRequests")
   pricingRules PricingRule[]
   teamMembers  TenantTeamMember[]
   rewardTxs    TenantRewardTx[]
@@ -352,66 +356,61 @@ model TenantRewardTx {
   @@index([memberId])
 }
 
-// P2P BTC desk — partner buys BTC from platform hot wallet, pays EUR
 model P2POrder {
-  id              String        @id @default(cuid())
-  tenantId        String?
-  tenant          PartnerCompany? @relation(fields: [tenantId], references: [id])
-  userId          String
-  user            User          @relation(fields: [userId], references: [id])
+  id            String          @id @default(cuid())
+  tenantId      String?
+  tenant        PartnerCompany? @relation(fields: [tenantId], references: [id])
+  userId        String
+  user          User            @relation(fields: [userId], references: [id])
 
-  // Quote
-  btcAmount       Float         // BTC to receive
-  eurAmount       Float         // EUR to pay
-  rateEurPerBtc   Float         // locked rate
-  feeEur          Float         @default(0)  // platform spread/fee
-  quoteExpiresAt  DateTime
+  btcAmount      Float
+  eurAmount      Float
+  rateEurPerBtc  Float
+  feeEur         Float          @default(0)
+  quoteExpiresAt DateTime
 
-  // Payment
-  status          P2POrderStatus @default(QUOTE)
-  paymentRef      String?       // bank transfer ref or Stripe PI id
-  paymentMethod   String        @default("bank") // bank | card
-  paidAt          DateTime?
+  status         P2POrderStatus @default(QUOTE)
+  paymentRef     String?
+  paymentMethod  String         @default("bank")
+  paidAt         DateTime?
 
-  // BTC delivery
-  destinationBtc  String        // partner's BTC address
-  btcTxHash       String?       // on-chain send tx
-  sentAt          DateTime?
-  confirmedAt     DateTime?
+  destinationBtc String
+  btcTxHash      String?
+  sentAt         DateTime?
+  confirmedAt    DateTime?
 
-  exchangeOrderId String?       // ref from exchange
+  exchangeOrderId String?
   notes           String?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   @@index([tenantId, status])
   @@index([status, quoteExpiresAt])
 }
 
-// Fiat invoices for platform subscription / services (paid by tenant in EUR)
 model TenantInvoice {
-  id            String        @id @default(cuid())
+  id            String         @id @default(cuid())
   tenantId      String
   tenant        PartnerCompany @relation(fields: [tenantId], references: [id])
 
-  number        String        @unique  // INV-2025-001
+  number        String         @unique
   description   String
   amountEur     Float
-  vatPct        Float         @default(24)
+  vatPct        Float          @default(24)
   totalEur      Float
 
-  status        InvoiceStatus @default(DRAFT)
+  status        InvoiceStatus  @default(DRAFT)
   dueDate       DateTime
   paidAt        DateTime?
   stripePaymentId String?
-  paymentMethod String?       // stripe | bank
-  bankRef       String?       // bank transfer ref
+  paymentMethod String?
+  bankRef       String?
 
-  lineItems     Json          // [{ description, qty, unitPrice }]
+  lineItems     Json
   notes         String?
 
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@index([tenantId, status])
 }
@@ -473,7 +472,7 @@ model TyreCatalogItem {
   retailPriceEur Float
   partnerCostEur Float?
   platformFeeEur Float                @default(0)
-  stockNote      String?
+  stockNote      String?  
   isActive       Boolean              @default(true)
   fitments       VehicleFitmentRule[]
   createdAt      DateTime             @default(now())
@@ -525,7 +524,7 @@ model AttestationRecord {
   subjectId   String
   mode        String
   hash        String
-  txId        String?
+  txId        String?  
   txHash      String?
   payloadJson Json
   rawJson     Json?
