@@ -22,7 +22,7 @@ export async function GET(req: NextRequest, { params }: { params: { slug: string
       margin: 2,
       color: { dark: "#1e1b4b", light: "#ffffff" },
     });
-    return new NextResponse(buf, {
+    return new NextResponse(buf.buffer as ArrayBuffer, {
       headers: {
         "Content-Type": "image/png",
         "Content-Disposition": `attachment; filename="sos-${params.slug}.png"`,
