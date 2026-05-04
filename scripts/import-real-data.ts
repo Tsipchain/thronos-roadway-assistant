@@ -96,9 +96,17 @@ function serviceTypes(value: string | undefined): ServiceType[] {
 
 async function importPartners() {
   for (const row of readCsv("partners.csv")) {
+    const slug =
+      optional(row.slug) ??
+      row.name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "");
+
     await prisma.partnerCompany.upsert({
       where: { name: row.name },
       update: {
+        slug,
         vatNumber: optional(row.vatNumber),
         phone: optional(row.phone),
         email: optional(row.email),
@@ -107,6 +115,7 @@ async function importPartners() {
       },
       create: {
         name: row.name,
+        slug,
         vatNumber: optional(row.vatNumber),
         phone: optional(row.phone),
         email: optional(row.email),
