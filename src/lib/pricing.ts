@@ -7,7 +7,7 @@ export async function estimateServicePrice(input: {
   now?: Date;
 }): Promise<number> {
   const now = input.now ?? new Date();
-  const rule = await prisma.pricingRule.findUnique({ where: { serviceType: input.serviceType } });
+  const rule = await prisma.pricingRule.findFirst({ where: { serviceType: input.serviceType, tenantId: null } });
 
   const fallbackBase: Record<ServiceType, number> = {
     BATTERY_REPLACEMENT: 40,
