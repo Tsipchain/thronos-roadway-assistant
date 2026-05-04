@@ -14,7 +14,7 @@ export default async function BuyBtcPage({ params }: { params: { slug: string } 
     redirect("/login");
   }
 
-  const [tenant, recentOrders] = await Promise.all([
+  const [tenant, rawOrders] = await Promise.all([
     prisma.partnerCompany.findUnique({
       where: { slug: params.slug },
       select: {
@@ -33,6 +33,19 @@ export default async function BuyBtcPage({ params }: { params: { slug: string } 
     }),
   ]);
   if (!tenant) notFound();
+
+  const recentOrders = rawOrders.map((o) => ({
+    id: o.id,
+    status: o.status,
+    btcAmount: o.btcAmount,
+    eurAmount: o.eurAmount,
+    rateEurPerBtc: o.rateEurPerBtc,
+    paymentRef: o.paymentRef,
+    destinationBtc: o.destinationBtc,
+    btcTxHash: o.btcTxHash,
+    createdAt: o.createdAt.toISOString(),
+    quoteExpiresAt: o.quoteExpiresAt.toISOString(),
+  }));
 
   return <BuyBtcDesk tenant={tenant} recentOrders={recentOrders} userId={session.user.id} />;
 }
