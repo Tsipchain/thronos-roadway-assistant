@@ -40,5 +40,17 @@ export default async function TeamPage({ params }: { params: { slug: string } })
   });
   if (!tenant) notFound();
 
-  return <TeamManagement tenant={tenant} />;
+  const serializedTenant = {
+    ...tenant,
+    pledgeVerifiedAt: tenant.pledgeVerifiedAt?.toISOString() ?? null,
+    teamMembers: tenant.teamMembers.map((m) => ({
+      ...m,
+      rewardTxs: m.rewardTxs.map((tx) => ({
+        ...tx,
+        createdAt: tx.createdAt.toISOString(),
+      })),
+    })),
+  };
+
+  return <TeamManagement tenant={serializedTenant} />;
 }
