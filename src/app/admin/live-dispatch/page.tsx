@@ -87,13 +87,15 @@ export default function LiveDispatchPage() {
   };
 
   const requestIcon = (status: string) => {
-    return L.circleMarker(undefined, {
-      radius: 8,
-      fillColor: getStatusColor(status),
-      color: "#000",
-      weight: 1,
-      opacity: 1,
-      fillOpacity: 0.8,
+    const color = getStatusColor(status);
+    return L.divIcon({
+      className: "",
+      iconSize: [16, 16],
+      iconAnchor: [8, 8],
+      popupAnchor: [0, -8],
+      html: `<svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="8" cy="8" r="7" fill="${color}" fill-opacity="0.8" stroke="#000" stroke-width="1"/>
+      </svg>`,
     });
   };
 
