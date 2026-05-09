@@ -138,6 +138,16 @@ export default function AdminDashboard() {
             <div className="text-2xl mb-2">💰</div>
             <div className="font-semibold text-sm">Pricing</div>
           </Link>
+
+          {(session?.user as { role?: string })?.role === "SUPER_ADMIN" && (
+            <Link
+              href="/admin/tenants"
+              className="bg-purple-600 rounded-lg shadow p-4 text-center hover:shadow-lg transition col-span-2 md:col-span-4"
+            >
+              <div className="text-2xl mb-2">🏢</div>
+              <div className="font-semibold text-sm text-white">All Tenants (Root Admin)</div>
+            </Link>
+          )}
         </div>
 
         {/* Revenue Chart */}
