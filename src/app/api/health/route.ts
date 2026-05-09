@@ -14,14 +14,18 @@ export async function GET() {
     checks.database = "error";
   }
 
-  try {
-    await redis.ping();
-    checks.redis = "ok";
-  } catch {
-    checks.redis = "error";
+  if (redis) {
+    try {
+      await redis.ping();
+      checks.redis = "ok";
+    } catch {
+      checks.redis = "error";
+    }
+  } else {
+    checks.redis = "not_configured";
   }
 
-  const allOk = Object.values(checks).every((v) => v === "ok");
+  const allOk = Object.values(checks).every((v) => v === "ok" || v === "not_configured");
 
   return NextResponse.json(
     {
