@@ -50,28 +50,30 @@ export default async function AdminJobsPage({ params }: { params: { slug: string
         <JobsClient
           slug={params.slug}
           jobs={jobs.map((j) => ({
-            id: j.id,
-            status: j.status,
-            serviceType: j.serviceType,
-            latitude: j.latitude,
-            longitude: j.longitude,
-            address: j.address,
-            estimatedPrice: j.estimatedPrice,
+            id:               j.id,
+            status:           j.status,
+            serviceType:      j.serviceType,
+            latitude:         j.latitude,
+            longitude:        j.longitude,
+            address:          j.address,
+            estimatedPrice:   j.estimatedPrice,
             estimatedMinutes: j.estimatedMinutes,
-            customer: j.customer,
-            vehicle: j.vehicle,
-            technician: j.technician,
-            createdAt: j.createdAt.toISOString(),
-            acceptedAt: j.acceptedAt?.toISOString() ?? null,
-            completedAt: j.completedAt?.toISOString() ?? null,
+            customer:         j.customer,
+            vehicle:          j.vehicle,
+            technician:       j.technician,
+            createdAt:        j.createdAt.toISOString(),
+            acceptedAt:       j.acceptedAt?.toISOString() ?? null,
+            completedAt:      j.completedAt?.toISOString() ?? null,
           }))}
           techs={techs.map((t) => ({
-            userId: t.user.id,
-            name: t.user.name,
-            phone: t.user.phone,
-            isOnline: t.isOnline,
+            userId:    t.user.id,
+            name:      t.user.name,
+            phone:     t.user.phone,
+            isOnline:  t.isOnline,
             totalJobs: t.totalJobs,
-            rating: t.rating,
+            rating:    t.rating,
+            latitude:  t.latitude,
+            longitude: t.longitude,
           }))}
         />
       </div>
