@@ -30,6 +30,8 @@ const METHOD_LABELS: Record<string, { label: string; desc: string }> = {
   BANK_TRANSFER:      { label: "🏦 Τραπεζικό Έμβασμα (SEPA)", desc: "Μεταφορά σε IBAN μέσα σε 1-3 εργάσιμες" },
   USDC_ETH:           { label: "💵 USDC (Ethereum)",            desc: "Stablecoin · χαμηλότερα fees μέσω EtherFi" },
   USDT_ETH:           { label: "💵 USDT (Ethereum)",            desc: "Stablecoin · χαμηλότερα fees μέσω EtherFi" },
+  USDC_POLYGON:       { label: "💵 USDC (Polygon)",            desc: "Ταχύτερη & χαμηλότερη χρέωση" },
+  USDT_POLYGON:       { label: "💵 USDT (Polygon)",            desc: "Ταχύτερη & χαμηλότερη χρέωση" },
   SUBSCRIPTION_OFFSET: { label: "📋 Subscription Offset",       desc: "Καλύπτεται από τη συνδρομή σου — τιμολόγιο τέλος μήνα" },
 };
 
@@ -38,6 +40,12 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   PROCESSING: { label: "Σε εξέλιξη", color: "text-blue-400" },
   PAID:       { label: "Εξοφλήθηκε", color: "text-green-400" },
   OFFSET:     { label: "Subscription", color: "text-slate-400" },
+};
+
+const NETWORK_COSTS = {
+  ETHEREUM: { name: "Ethereum (mainnet)", estimatedFee: "€2-8", speed: "~15 min", note: "Πιο ακριβή αλλά πιο ασφαλής" },
+  POLYGON:  { name: "Polygon", estimatedFee: "€0.01-0.10", speed: "~2 min", note: "Χαμηλότερο cost, γρήγορη" },
+  ARBITRUM: { name: "Arbitrum", estimatedFee: "€0.05-0.50", speed: "~3 min", note: "Καλή ισορροπία" },
 };
 
 export default function PayoutSettingsPage() {
@@ -51,6 +59,7 @@ export default function PayoutSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [showNetworks, setShowNetworks] = useState(false);
 
   // Form state
   const [method, setMethod] = useState("BANK_TRANSFER");
@@ -154,7 +163,7 @@ export default function PayoutSettingsPage() {
                   onChange={() => setMethod(key)}
                   className="mt-0.5"
                 />
-                <div>
+                <div className="flex-1">
                   <div className="font-medium text-sm">{label}</div>
                   <div className="text-slate-500 text-xs mt-0.5">{desc}</div>
                 </div>
@@ -187,18 +196,63 @@ export default function PayoutSettingsPage() {
           )}
 
           {/* ETH wallet for USDC/USDT */}
-          {(method === "USDC_ETH" || method === "USDT_ETH") && (
-            <div>
-              <label className="text-sm text-slate-400 block mb-1">ETH Wallet Address</label>
-              <input
-                value={wallet}
-                onChange={(e) => setWallet(e.target.value)}
-                placeholder="0x..."
-                className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-sm font-mono focus:outline-none focus:border-purple-500"
-              />
-              <p className="text-slate-500 text-xs mt-2">
-                Εκκαθάριση μέσω EtherFi · χαμηλότερα gas fees · συνήθως εντός 24ω
-              </p>
+          {(method.includes("USDC") || method.includes("USDT")) && (
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm text-slate-400 block mb-1">Ethereum Wallet Address</label>
+                <input
+                  value={wallet}
+                  onChange={(e) => setWallet(e.target.value)}
+                  placeholder="0x..."
+                  className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-sm font-mono focus:outline-none focus:border-purple-500"
+                />
+              </div>
+
+              {/* Network comparison */}
+              <div className="bg-slate-800/50 rounded-xl p-4">
+                <button
+                  onClick={() => setShowNetworks(!showNetworks)}
+                  className="w-full flex items-center justify-between text-left text-sm font-medium text-slate-300 hover:text-slate-100 transition"
+                >
+                  <span>📊 Σύγκριση δικτύων (κόστη & ταχύτητα)</span>
+                  <span className="text-xs">{showNetworks ? "▼" : "▶"}</span>
+                </button>
+
+                {showNetworks && (
+                  <div className="mt-3 space-y-2 pt-3 border-t border-white/10">
+                    {Object.entries(NETWORK_COSTS).map(([key, { name, estimatedFee, speed, note }]) => (
+                      <div key={key} className="text-xs space-y-0.5 p-2 bg-white/5 rounded-lg">
+                        <div className="font-medium text-slate-200">{name}</div>
+                        <div className="text-slate-400">
+                          💰 Χρέωση: <span className="text-amber-300">{estimatedFee}</span> · ⚡ Ταχύτητα: <span className="text-blue-300">{speed}</span>
+                        </div>
+                        <div className="text-slate-500">💡 {note}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* EtherFi */}
+              <div className="bg-gradient-to-r from-blue-900/30 to-purple-900/30 border border-blue-500/30 rounded-xl p-4">
+                <div className="flex items-start gap-3">
+                  <div className="text-2xl flex-shrink-0">💳</div>
+                  <div className="flex-1">
+                    <div className="font-semibold text-sm mb-1">EtherFi - Crypto to Fiat</div>
+                    <div className="text-slate-400 text-xs mb-2">
+                      Μετατρέψτε τα USDC/USDT πίσω σε EUR μέσω EtherFi Visa Card ή bank transfer
+                    </div>
+                    <a
+                      href="https://etherfi.com?ref=thronos_roadway"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-block bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition"
+                    >
+                      Δημιουργία EtherFi λογαριασμού →
+                    </a>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
