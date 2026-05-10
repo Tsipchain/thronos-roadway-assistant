@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { canAccessTenant } from "@/lib/tenant";
 import Link from "next/link";
+import LogoutButton from "@/components/LogoutButton";
 
 export const dynamic = "force-dynamic";
 
@@ -57,8 +58,8 @@ export default async function TenantAdminPage({ params }: { params: { slug: stri
     prisma.serviceRequest.findMany({
       where: { tenantId: tenant.id },
       include: {
-        customer: { select: { name: true, phone: true } },
-        vehicle: { select: { licensePlate: true, make: true, model: true } },
+        customer:   { select: { name: true, phone: true } },
+        vehicle:    { select: { licensePlate: true, make: true, model: true } },
         technician: { select: { name: true } },
       },
       orderBy: { createdAt: "desc" },
@@ -88,7 +89,7 @@ export default async function TenantAdminPage({ params }: { params: { slug: stri
               </p>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 items-center">
             <Link href={`/t/${params.slug}/admin/qr`}
               className="text-sm bg-white/5 border border-white/10 px-4 py-2 rounded-xl hover:bg-white/10 transition">
               📱 QR Code
@@ -104,6 +105,7 @@ export default async function TenantAdminPage({ params }: { params: { slug: stri
             {session.user.role === "SUPER_ADMIN" && (
               <Link href="/admin" className="text-sm text-slate-400 hover:text-white transition">← Root</Link>
             )}
+            <LogoutButton />
           </div>
         </div>
 
@@ -113,7 +115,7 @@ export default async function TenantAdminPage({ params }: { params: { slug: stri
             className="flex items-center gap-4 bg-purple-500/10 border border-purple-500/30 rounded-2xl p-4 mb-6 hover:bg-purple-500/15 transition">
             <div className="text-3xl">🔒</div>
             <div>
-              <div className="font-semibold text-purple-300">Ξεκλειδώστε Enterprise — THR Wallets & Rewards για την ομάδα σας</div>
+              <div className="font-semibold text-purple-300">Ξεκλειδώστε Enterprise — THR Wallets &amp; Rewards για την ομάδα σας</div>
               <div className="text-sm text-slate-400 mt-0.5">Απαιτείται pledge ≥ 0.011 BTC στο Thronos Chain → Ρύθμιση →</div>
             </div>
           </Link>
@@ -226,7 +228,7 @@ export default async function TenantAdminPage({ params }: { params: { slug: stri
                       <td className="py-3 text-slate-300">{SERVICE_LABELS[j.serviceType] ?? j.serviceType}</td>
                       <td className="py-3 text-slate-400">{j.technician?.name ?? <span className="text-slate-600">—</span>}</td>
                       <td className="py-3">
-                        <span className={`text-xs px-2 py-1 rounded-full ${STATUS_COLORS[j.status] ?? "bg-white/10"}` }>
+                        <span className={`text-xs px-2 py-1 rounded-full ${STATUS_COLORS[j.status] ?? "bg-white/10"}`}>
                           {j.status}
                         </span>
                       </td>

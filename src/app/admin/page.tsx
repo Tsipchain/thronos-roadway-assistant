@@ -3,8 +3,17 @@ import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
+import LogoutButton from "@/components/LogoutButton";
 
 export const dynamic = "force-dynamic";
+
+const SERVICE_BADGES: Record<string, string> = {
+  BATTERY_REPLACEMENT: "🔋",
+  BATTERY_CHARGE:      "⚡",
+  TIRE_CHANGE:         "🛞",
+  TIRE_REPAIR:         "🔧",
+  DIAGNOSIS:           "🔍",
+};
 
 export default async function SuperAdminPage() {
   const session = await getServerSession(authOptions);
@@ -15,7 +24,8 @@ export default async function SuperAdminPage() {
   const [tenants, totalJobs, activeJobs, pendingP2P, pendingInvoices] = await Promise.all([
     prisma.partnerCompany.findMany({
       include: {
-        _count: { select: { technicians: true, requests: true, users: true } },
+        _count:       { select: { technicians: true, requests: true, users: true } },
+        pricingRules: { where: { isActive: true }, select: { serviceType: true } },
       },
       orderBy: { createdAt: "desc" },
     }),
@@ -28,10 +38,10 @@ export default async function SuperAdminPage() {
   ]);
 
   const systemStats = [
-    { label: "Tenants", value: tenants.length, color: "text-purple-400" },
-    { label: "Σύνολο Jobs", value: totalJobs, color: "text-blue-400" },
-    { label: "Ενεργά Jobs", value: activeJobs, color: "text-amber-400" },
-    { label: "Platform", value: "LIVE", color: "text-green-400" },
+    { label: "Tenants",    value: tenants.length, color: "text-purple-400" },
+    { label: "Σύνολο Jobs", value: totalJobs,      color: "text-blue-400" },
+    { label: "Ενεργά Jobs", value: activeJobs,     color: "text-amber-400" },
+    { label: "Platform",   value: "LIVE",          color: "text-green-400" },
   ];
 
   return (
@@ -49,12 +59,15 @@ export default async function SuperAdminPage() {
               <p className="text-slate-400 text-sm">Root Admin · {session.user.email}</p>
             </div>
           </div>
-          <Link
-            href="/admin/tenants/new"
-            className="bg-purple-600 hover:bg-purple-500 text-sm font-medium px-5 py-2.5 rounded-xl transition shadow"
-          >
-            + Νέος Partner
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/admin/tenants/new"
+              className="bg-purple-600 hover:bg-purple-500 text-sm font-medium px-5 py-2.5 rounded-xl transition shadow"
+            >
+              + Νέος Partner
+            </Link>
+            <LogoutButton />
+          </div>
         </div>
 
         {/* System Stats */}
@@ -127,11 +140,10 @@ export default async function SuperAdminPage() {
                 <thead>
                   <tr className="text-slate-400 border-b border-white/10 text-left">
                     <th className="pb-3">Εταιρεία</th>
-                    <th className="pb-3">URL</th>
+                    <th className="pb-3">Υπηρεσίες</th>
                     <th className="pb-3">Plan</th>
                     <th className="pb-3 text-center">Τεχνικοί</th>
                     <th className="pb-3 text-center">Jobs</th>
-                    <th className="pb-3 text-center">Χρήστες</th>
                     <th className="pb-3 text-center">Status</th>
                     <th className="pb-3"></th>
                   </tr>
@@ -139,8 +151,23 @@ export default async function SuperAdminPage() {
                 <tbody>
                   {tenants.map((t) => (
                     <tr key={t.id} className="border-b border-white/5 hover:bg-white/5 transition">
-                      <td className="py-3 font-medium">{t.name}</td>
-                      <td className="py-3 text-slate-400 font-mono text-xs">/t/{t.slug}</td>
+                      <td className="py-3">
+                        <div className="font-medium">{t.name}</div>
+                        <div className="text-slate-500 font-mono text-xs">/t/{t.slug}</div>
+                      </td>
+                      <td className="py-3">
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {t.pricingRules.length === 0 ? (
+                            <span className="text-slate-600 text-xs">—</span>
+                          ) : (
+                            t.pricingRules.map((r) => (
+                              <span key={r.serviceType} title={r.serviceType} className="text-base">
+                                {SERVICE_BADGES[r.serviceType] ?? "•"}
+                              </span>
+                            ))
+                          )}
+                        </div>
+                      </td>
                       <td className="py-3">
                         <span className="bg-purple-500/20 text-purple-300 text-xs px-2 py-1 rounded-full">
                           {t.plan}
@@ -148,20 +175,24 @@ export default async function SuperAdminPage() {
                       </td>
                       <td className="py-3 text-center text-slate-300">{t._count.technicians}</td>
                       <td className="py-3 text-center text-slate-300">{t._count.requests}</td>
-                      <td className="py-3 text-center text-slate-300">{t._count.users}</td>
                       <td className="py-3 text-center">
-                        <span
-                          className={`text-xs px-2 py-1 rounded-full ${
-                            t.status === "ACTIVE"
-                              ? "bg-green-500/20 text-green-300"
-                              : "bg-red-500/20 text-red-300"
-                          }`}
-                        >
+                        <span className={`text-xs px-2 py-1 rounded-full ${
+                          t.status === "ACTIVE"
+                            ? "bg-green-500/20 text-green-300"
+                            : "bg-red-500/20 text-red-300"
+                        }`}>
                           {t.status}
                         </span>
                       </td>
                       <td className="py-3">
-                        <div className="flex gap-3 justify-end">
+                        <div className="flex gap-2 justify-end items-center">
+                          <Link
+                            href={`/admin/tenants/${t.slug}`}
+                            className="text-slate-500 hover:text-slate-200 text-xs"
+                            title="Διαχείριση υπηρεσιών"
+                          >
+                            Υπηρ.
+                          </Link>
                           <Link
                             href={`/t/${t.slug}`}
                             className="text-slate-400 hover:text-slate-200 text-xs"
