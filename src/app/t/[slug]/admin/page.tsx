@@ -150,6 +150,78 @@ export default async function TenantAdminPage({ params }: { params: { slug: stri
           <LogoUpload tenantSlug={params.slug} initialLogo={tenant.logoUrl} tenantName={tenant.name} />
         </div>
 
+        {/* Subscription Status */}
+        {(() => {
+          const now = new Date();
+          const until = tenant.planActiveUntil;
+          const daysLeft = until
+            ? Math.floor((until.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+            : null;
+          const isActive   = until && until > now;
+          const daysOverdue = until && !isActive ? Math.floor((now.getTime() - until.getTime()) / (1000 * 60 * 60 * 24)) : 0;
+          const isBlocked  = daysOverdue > 2;
+          const isWarn     = !isActive && !isBlocked;
+          const soonAlert  = isActive && daysLeft !== null && daysLeft <= 7;
+
+          const borderCls = isBlocked
+            ? "border-red-500/40 bg-red-500/10"
+            : isWarn
+              ? "border-amber-500/40 bg-amber-500/10"
+              : soonAlert
+                ? "border-amber-500/30 bg-amber-500/5"
+                : "border-green-500/30 bg-green-500/5";
+
+          const badgeCls = isBlocked
+            ? "bg-red-500/20 text-red-300"
+            : isWarn
+              ? "bg-amber-500/20 text-amber-300"
+              : soonAlert
+                ? "bg-amber-400/20 text-amber-300"
+                : "bg-green-500/20 text-green-300";
+
+          const statusLabel = isBlocked
+            ? "ΑΠΟΚΛΕΙΣΜΕΝΗ"
+            : isWarn
+              ? "ΛΗΞΗ (GRACE)"
+              : soonAlert
+                ? "ΛΗΓΕΙ ΣΥΝΤΟΜΑ"
+                : "ΕΝΕΡΓΗ";
+
+          const statusIcon = isBlocked ? "🔴" : isWarn ? "🟠" : soonAlert ? "🟡" : "🟢";
+
+          return (
+            <div className={`border rounded-2xl p-5 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${borderCls}`}>
+              <div className="flex items-center gap-4">
+                <div className="text-3xl">{statusIcon}</div>
+                <div>
+                  <div className="font-semibold text-sm text-slate-200">
+                    Συνδρομή · Πλάνο {tenant.plan}
+                  </div>
+                  {until ? (
+                    <div className="text-xs text-slate-400 mt-0.5">
+                      {isActive
+                        ? <>Λήγει <strong className="text-white">{until.toLocaleDateString("el-GR")}</strong> &middot; {daysLeft} ημέρες</>
+                        : <>Έληξε <strong className="text-white">{until.toLocaleDateString("el-GR")}</strong> &middot; {daysOverdue} ημέρες πριν</>
+                      }
+                    </div>
+                  ) : (
+                    <div className="text-xs text-slate-400 mt-0.5">Χωρίς ενεργή συνδρομή</div>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className={`text-xs font-semibold px-3 py-1 rounded-full ${badgeCls}`}>{statusLabel}</span>
+                <Link
+                  href={`/t/${params.slug}/admin/payout-settings`}
+                  className="text-xs bg-white/5 border border-white/10 px-3 py-1.5 rounded-xl hover:bg-white/10 transition text-slate-300"
+                >
+                  💰 Ρυθμίσεις Πληρωμής →
+                </Link>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           {[
