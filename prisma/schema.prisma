@@ -120,10 +120,10 @@ model TechnicianProfile {
   coverageRadiusKm Float           @default(15)
   vehiclePlate     String?
   inventoryNote    String?
+  serviceAreaId    String?
+  serviceArea      ServiceArea?    @relation("TechnicianServiceArea", fields: [serviceAreaId], references: [id])
   companyId        String?
   company          PartnerCompany? @relation(fields: [companyId], references: [id])
-  serviceAreaId    String?
-  serviceArea      ServiceArea?    @relation(fields: [serviceAreaId], references: [id])
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
 }
@@ -472,6 +472,7 @@ model ServiceArea {
   serviceTypes    ServiceType[]
   slaMinutes      Int             @default(30)
   isActive        Boolean         @default(true)
+  technicians     TechnicianProfile[] @relation("TechnicianServiceArea")
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 

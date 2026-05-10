@@ -90,12 +90,46 @@ export default async function TenantAdminPage({ params }: { params: { slug: stri
               </p>
             </div>
           </div>
+          </div>
           <div className="flex flex-wrap gap-2 items-center">
             <Link
               href={`/t/${params.slug}/admin/stats`}
               className="text-sm bg-blue-600/20 border border-blue-500/30 px-4 py-2 rounded-xl hover:bg-blue-600/30 transition text-blue-300"
             >
               📊 Στατιστικά
+            </Link>
+            <Link href={`/t/${params.slug}/admin/technicians`}
+              className="text-sm bg-indigo-600/20 border border-indigo-500/30 px-4 py-2 rounded-xl hover:bg-indigo-600/30 transition text-indigo-300">
+              🗺️ Service Areas
+            </Link>
+            <Link href={`/t/${params.slug}/admin/qr`}
+              className="text-sm bg-white/5 border border-white/10 px-4 py-2 rounded-xl hover:bg-white/10 transition">
+              📱 QR Code
+            </Link>
+            <Link
+              href={`/t/${params.slug}/admin/team`}
+              className="text-sm bg-purple-600/20 border border-purple-500/30 px-4 py-2 rounded-xl hover:bg-purple-600/30 transition text-purple-300"
+            >
+              👥 Ομάδα ({tenant.technicians.length})
+            </Link>
+            <Link
+              href={`/t/${params.slug}/admin/jobs`}
+              className={`text-sm px-4 py-2 rounded-xl transition border ${
+                pendingJobs > 0
+                  ? "bg-amber-500/20 border-amber-500/40 text-amber-300 hover:bg-amber-500/30 font-semibold"
+                  : "bg-white/5 border-white/10 text-slate-300 hover:bg-white/10"
+              }`}
+            >
+              📋 Jobs{pendingJobs > 0 ? ` (${pendingJobs} νέα)` : ""}
+            </Link>
+            <Link href={`/t/${params.slug}`} target="_blank"
+              className="text-sm bg-white/5 border border-white/10 px-4 py-2 rounded-xl hover:bg-white/10 transition">
+              SOS ↗
+            </Link>
+            {session.user.role === "SUPER_ADMIN" && (
+              <Link href="/admin" className="text-sm text-slate-400 hover:text-white transition">← Root</Link>
+            )}
+            <LogoutButton />
             </Link>
             <Link
               href={`/t/${params.slug}/admin/team`}
