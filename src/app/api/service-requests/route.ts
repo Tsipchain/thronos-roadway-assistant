@@ -96,6 +96,35 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Check subscription status if this is a tenant request
+    if (tenantId) {
+      const tenant = await prisma.partnerCompany.findUnique({
+        where: { id: tenantId },
+      });
+
+      if (tenant) {
+        const now = new Date();
+        if (!tenant.planActiveUntil || tenant.planActiveUntil <= now) {
+          const daysExpired = tenant.planActiveUntil
+            ? Math.floor((now.getTime() - tenant.planActiveUntil.getTime()) / (1000 * 60 * 60 * 24))
+            : 999;
+
+          if (daysExpired > 2) {
+            return NextResponse.json(
+              {
+                error: "Service blocked: subscription expired",
+                message: `Subscription expired ${daysExpired} days ago. Please renew to continue.`,
+              },
+              { status: 403 }
+            );
+          } else if (daysExpired > 0) {
+            // Warning: subscription expired but within 2-day grace period
+            console.warn(`Subscription expiring for ${tenant.name}`);
+          }
+        }
+      }
+    }
+
     const request = await prisma.serviceRequest.create({
       data: {
         customerId,

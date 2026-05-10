@@ -120,6 +120,8 @@ model TechnicianProfile {
   coverageRadiusKm Float           @default(15)
   vehiclePlate     String?
   inventoryNote    String?
+  serviceAreaId    String?
+  serviceArea      ServiceArea?    @relation("TechnicianServiceArea", fields: [serviceAreaId], references: [id])
   companyId        String?
   company          PartnerCompany? @relation(fields: [companyId], references: [id])
   createdAt        DateTime        @default(now())
@@ -311,11 +313,11 @@ model PartnerCompany {
   thrRewardPoolBalance Float  @default(0)
 
   // Payout settings
-  payoutMethod        String  @default("BANK_TRANSFER")  // BANK_TRANSFER | USDC_ETH | USDT_ETH | SUBSCRIPTION_OFFSET
+  payoutMethod        String  @default("BANK_TRANSFER")
   payoutIban          String?
   payoutBic           String?
-  payoutWalletAddress String?  // ETH wallet for USDC/USDT settlements
-  platformFeePercent  Float   @default(8)  // overrideable per tenant
+  payoutWalletAddress String?
+  platformFeePercent  Float   @default(8)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -470,8 +472,11 @@ model ServiceArea {
   serviceTypes    ServiceType[]
   slaMinutes      Int             @default(30)
   isActive        Boolean         @default(true)
+  technicians     TechnicianProfile[] @relation("TechnicianServiceArea")
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
+
+  technicians TechnicianProfile[]
 
   @@unique([name, city])
   @@index([city, isActive])
