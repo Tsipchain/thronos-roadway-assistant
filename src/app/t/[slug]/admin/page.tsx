@@ -91,7 +91,6 @@ export default async function TenantAdminPage({ params }: { params: { slug: stri
               </p>
             </div>
           </div>
-          </div>
           <div className="flex flex-wrap gap-2 items-center">
             <Link
               href={`/t/${params.slug}/admin/stats`}
