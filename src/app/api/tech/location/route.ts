@@ -1,66 +1,30 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 
-/**
- * POST /api/tech/location
- * Technician updates their location for dispatch matching.
- * Called every 10 seconds from mobile app.
- * Body: { userId, latitude, longitude }
- */
-export async function POST(req: NextRequest) {
-  const { userId, latitude, longitude } = await req.json();
-
-  if (!userId || !latitude || !longitude) {
-    return NextResponse.json(
-      { error: 'Missing fields' },
-      { status: 400 },
-    );
+export async function PATCH(req: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session || session.user.role !== "TECHNICIAN") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Update technician profile
-  const tech = await prisma.technicianProfile.findUnique({
-    where: { userId },
-  });
+  const body = await req.json();
+  const { latitude, longitude, isOnline, isAvailable } = body;
 
-  if (!tech) {
-    return NextResponse.json(
-      { error: 'Technician not found' },
-      { status: 404 },
-    );
+  const data: Record<string, unknown> = {};
+  if (typeof latitude    === "number")  data.latitude    = latitude;
+  if (typeof longitude   === "number")  data.longitude   = longitude;
+  if (typeof isOnline    === "boolean") data.isOnline    = isOnline;
+  if (typeof isAvailable === "boolean") data.isAvailable = isAvailable;
+  if (typeof latitude    === "number" && typeof longitude === "number") {
+    data.lastLocationAt = new Date();
   }
 
-  await prisma.technicianProfile.update({
-    where: { userId },
-    data: {
-      latitude,
-      longitude,
-      lastLocationAt: new Date(),
-      isOnline: true,
-    },
+  await prisma.technicianProfile.updateMany({
+    where: { userId: session.user.id },
+    data,
   });
-
-  // Also warm Redis cache (async, don't block)
-  void (async () => {
-    const { upsertTechnicianLocation } = await import('@/lib/location-cache');
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        name: true,
-        phone: true,
-        id: true,
-      },
-    });
-    if (user && tech) {
-      await upsertTechnicianLocation(userId, longitude, latitude, {
-        isAvailable: tech.isAvailable,
-        specialties: tech.specialties as string[],
-        rating: tech.rating,
-        coverageRadiusKm: tech.coverageRadiusKm,
-        name: user.name,
-        phone: user.phone || '',
-      });
-    }
-  })();
 
   return NextResponse.json({ ok: true });
 }
