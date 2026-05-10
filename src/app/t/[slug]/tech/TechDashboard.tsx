@@ -3,6 +3,17 @@ import { useState, useEffect, useRef } from "react";
 import { signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
+// Extend Window for beforeinstallprompt event
+declare global {
+  interface WindowEventMap {
+    beforeinstallprompt: BeforeInstallPromptEvent;
+  }
+}
+interface BeforeInstallPromptEvent extends Event {
+  prompt(): Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+}
+
 const STATUS_LABELS: Record<string, string> = {
   PENDING:     "Εκκρεμεί",
   ACCEPTED:    "Αποδεκτό",
@@ -126,6 +137,9 @@ export default function TechDashboard({
   const [completeConfirm, setCompleteConfirm] = useState<CompleteConfirm | null>(null);
   const [paymentLink, setPaymentLink]         = useState<string | null>(null);
   const [linkCopied, setLinkCopied]           = useState(false);
+  const [installPrompt, setInstallPrompt]     = useState<BeforeInstallPromptEvent | null>(null);
+  const [isInstalled, setIsInstalled]         = useState(false);
+  const [showIosHint, setShowIosHint]         = useState(false);
 
   useEffect(() => {
     const id = setInterval(() => { router.refresh(); setLastRefresh(new Date()); }, 30_000);
@@ -159,6 +173,39 @@ export default function TechDashboard({
     const id = setInterval(send, 60_000);
     return () => clearInterval(id);
   }, [isOnline]);
+
+  // PWA install detection
+  useEffect(() => {
+    // Check if already installed (standalone mode)
+    if (window.matchMedia("(display-mode: standalone)").matches) {
+      setIsInstalled(true);
+      return;
+    }
+
+    // Android Chrome: capture the install prompt
+    const handler = (e: BeforeInstallPromptEvent) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+
+    // iOS detection — no beforeinstallprompt, show manual hint
+    const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const isInBrowser = !window.matchMedia("(display-mode: standalone)").matches;
+    if (isIos && isInBrowser) setShowIosHint(true);
+
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  const handleInstall = async () => {
+    if (!installPrompt) return;
+    await installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    if (outcome === "accepted") {
+      setInstallPrompt(null);
+      setIsInstalled(true);
+    }
+  };
 
   const updateStatus = async (
     requestId: string,
@@ -234,6 +281,47 @@ export default function TechDashboard({
   return (
     <main className="min-h-screen bg-slate-950 text-white p-4 md:p-6">
       <div className="max-w-lg mx-auto">
+
+        {/* Android: native install prompt */}
+        {installPrompt && !isInstalled && (
+          <div className="mb-4 bg-indigo-500/15 border border-indigo-500/40 rounded-2xl p-4 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">📲</span>
+              <div>
+                <div className="font-semibold text-indigo-300 text-sm">Εγκαταστήστε την εφαρμογή</div>
+                <div className="text-xs text-slate-400">Άμεση πρόσβαση από την αρχική οθόνη</div>
+              </div>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <button onClick={() => setInstallPrompt(null)} className="text-slate-500 text-xs px-2 py-1">Αργότερα</button>
+              <button
+                onClick={handleInstall}
+                className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-3 py-1.5 rounded-xl transition"
+              >
+                Εγκατάσταση
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* iOS Safari: manual instructions */}
+        {showIosHint && !isInstalled && (
+          <div className="mb-4 bg-blue-500/15 border border-blue-500/40 rounded-2xl p-4">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-start gap-3">
+                <span className="text-2xl">📲</span>
+                <div>
+                  <div className="font-semibold text-blue-300 text-sm">Εγκαταστήστε την εφαρμογή</div>
+                  <div className="text-xs text-slate-400 mt-1">
+                    Πατήστε <span className="text-white font-medium">Κοινοποίηση ↑</span> και μετά{" "}
+                    <span className="text-white font-medium">&ldquo;Προσθήκη στην Αρχική Οθόνη&rdquo;</span>
+                  </div>
+                </div>
+              </div>
+              <button onClick={() => setShowIosHint(false)} className="text-slate-500 text-lg leading-none">×</button>
+            </div>
+          </div>
+        )}
 
         {newJobAlert && (
           <div className="mb-4 bg-purple-500/20 border border-purple-500/40 rounded-2xl p-4 flex items-center gap-3 animate-pulse">
