@@ -22,7 +22,17 @@ export async function PATCH(
   }
 
   const body = await req.json();
-  const { status, estimatedMinutes } = body;
+  const {
+    status,
+    // EN_ROUTE: tech updates their own ETA estimate
+    estimatedMinutes,
+    // COMPLETED: completion details
+    finalPrice,
+    paymentMethod, // "CASH" | "CARD"
+    batteryAh,     // 45 | 55 | 65 | null
+    batteryBrand,  // free text, e.g. "Varta Blue Dynamic"
+    technicianNotes,
+  } = body;
 
   const request = await prisma.serviceRequest.findUnique({
     where: { id: params.requestId },
@@ -42,16 +52,20 @@ export async function PATCH(
     technicianId: request.technicianId ?? session.user.id,
   };
 
-  if (status === "ACCEPTED")    updateData.acceptedAt   = new Date();
-  if (status === "ARRIVED")     updateData.arrivedAt    = new Date();
-  if (status === "COMPLETED")   updateData.completedAt  = new Date();
-  if (status === "CANCELLED")   updateData.cancelledAt  = new Date();
+  if (status === "ACCEPTED")  updateData.acceptedAt  = new Date();
+  if (status === "ARRIVED")   updateData.arrivedAt   = new Date();
+  if (status === "COMPLETED") updateData.completedAt = new Date();
+  if (status === "CANCELLED") updateData.cancelledAt = new Date();
 
-  // When tech goes EN_ROUTE they can update ETA — reset acceptedAt so customer
-  // countdown becomes accurate from the moment the tech actually departed
+  // Tech provides their own ETA when departing
   if (status === "EN_ROUTE" && typeof estimatedMinutes === "number" && estimatedMinutes >= 1) {
     updateData.estimatedMinutes = Math.max(1, Math.min(180, estimatedMinutes));
-    updateData.acceptedAt = new Date();
+    updateData.acceptedAt = new Date(); // reset countdown from departure
+  }
+
+  // Save final price if tech confirmed it at completion
+  if (status === "COMPLETED" && typeof finalPrice === "number" && finalPrice > 0) {
+    updateData.finalPrice = finalPrice;
   }
 
   const updated = await prisma.serviceRequest.update({
@@ -60,11 +74,63 @@ export async function PATCH(
   });
 
   if (status === "COMPLETED") {
+    const techUserId = updated.technicianId ?? session.user.id;
+
+    // Build parts list
+    const partsUsed: string[] = [];
+    if (batteryAh) {
+      const label = batteryBrand
+        ? `${batteryBrand} ${batteryAh}Ah`
+        : `Μπαταρία ${batteryAh}Ah`;
+      partsUsed.push(label);
+    }
+
+    // Create service record (skip if already exists)
+    const existing = await prisma.serviceRecord.findUnique({ where: { requestId: updated.id } });
+    if (!existing) {
+      await prisma.serviceRecord.create({
+        data: {
+          requestId:      updated.id,
+          vehicleId:      updated.vehicleId,
+          serviceType:    updated.serviceType,
+          description:    technicianNotes || "Ολοκλήρωση εργασίας",
+          partsUsed,
+          technicianNotes: technicianNotes || null,
+        },
+      });
+    }
+
+    // Record payment
+    if (paymentMethod && finalPrice && finalPrice > 0) {
+      const method = paymentMethod === "CARD" ? "CARD" : "CASH";
+      await prisma.payment.upsert({
+        where:  { requestId: updated.id },
+        create: {
+          requestId: updated.id,
+          method:    method as any,
+          status:    "COMPLETED",
+          amount:    finalPrice,
+          currency:  "EUR",
+        },
+        update: {
+          method: method as any,
+          status: "COMPLETED",
+          amount: finalPrice,
+        },
+      });
+    }
+
+    // Increment technician's total jobs
     await prisma.technicianProfile.updateMany({
-      where: { userId: updated.technicianId ?? session.user.id },
-      data: { totalJobs: { increment: 1 } },
+      where: { userId: techUserId },
+      data:  { totalJobs: { increment: 1 } },
     });
   }
 
-  return NextResponse.json({ ok: true, status: updated.status, estimatedMinutes: updated.estimatedMinutes });
+  return NextResponse.json({
+    ok: true,
+    status: updated.status,
+    finalPrice: updated.finalPrice,
+    estimatedMinutes: updated.estimatedMinutes,
+  });
 }

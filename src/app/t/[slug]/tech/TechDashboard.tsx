@@ -43,19 +43,23 @@ const NEXT_STATUS: Record<string, string | null> = {
 
 const NEXT_LABEL: Record<string, string> = {
   PENDING:     "✓ Δέχομαι",
-  EN_ROUTE:    "📍 Έφτασα",
-  ARRIVED:     "🔧 Ξεκινώ",
+  EN_ROUTE:    "\u{1F4CD} Έφτασα",
+  ARRIVED:     "\u{1F527} Ξεκινώ",
   IN_PROGRESS: "✅ Ολοκλήρωσα",
 };
 
-function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+const BATTERY_TIERS = [
+  { ah: 45, label: "45Ah", sublabel: "Τυπική",        surcharge: 0  },
+  { ah: 55, label: "55Ah", sublabel: "Ενισχυμένη",  surcharge: 10 },
+  { ah: 65, label: "65Ah", sublabel: "Premium",         surcharge: 20 },
+];
+
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
   const R = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
 interface Job {
@@ -90,6 +94,16 @@ interface Props {
   slug: string;
 }
 
+type EtaConfirm = { job: Job; eta: number };
+type CompleteConfirm = {
+  job: Job;
+  batteryAh: number | null;
+  batteryBrand: string;
+  paymentMethod: "CASH" | "CARD";
+  finalPrice: number;
+  notes: string;
+};
+
 export default function TechDashboard({
   techProfile,
   activeJobs,
@@ -106,21 +120,16 @@ export default function TechDashboard({
   const [newJobAlert, setNewJobAlert] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(new Date());
   const [myLoc, setMyLoc]             = useState<{ lat: number; lng: number } | null>(null);
-  const prevCountRef = useRef(activeJobs.length);
+  const prevCountRef                  = useRef(activeJobs.length);
 
-  // ETA confirm state (before EN_ROUTE)
-  const [etaConfirm, setEtaConfirm] = useState<{ job: Job; eta: number } | null>(null);
+  const [etaConfirm, setEtaConfirm]         = useState<EtaConfirm | null>(null);
+  const [completeConfirm, setCompleteConfirm] = useState<CompleteConfirm | null>(null);
 
-  // Auto-refresh server data every 30s
   useEffect(() => {
-    const id = setInterval(() => {
-      router.refresh();
-      setLastRefresh(new Date());
-    }, 30_000);
+    const id = setInterval(() => { router.refresh(); setLastRefresh(new Date()); }, 30_000);
     return () => clearInterval(id);
   }, [router]);
 
-  // Sync jobs from server
   useEffect(() => {
     setJobs(activeJobs);
     if (activeJobs.length > prevCountRef.current) {
@@ -130,52 +139,45 @@ export default function TechDashboard({
     prevCountRef.current = activeJobs.length;
   }, [activeJobs]);
 
-  // GPS location tracking — send to server every 60s when online
   useEffect(() => {
     if (!isOnline || !navigator?.geolocation) return;
-    const send = () => {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const { latitude, longitude } = pos.coords;
-          setMyLoc({ lat: latitude, lng: longitude });
-          fetch("/api/tech/location", {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ latitude, longitude }),
-          }).catch(() => {});
-        },
-        () => {},
-        { enableHighAccuracy: true, timeout: 10000 }
-      );
-    };
+    const send = () => navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        setMyLoc({ lat: coords.latitude, lng: coords.longitude });
+        fetch("/api/tech/location", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ latitude: coords.latitude, longitude: coords.longitude }),
+        }).catch(() => {});
+      },
+      () => {},
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
     send();
     const id = setInterval(send, 60_000);
     return () => clearInterval(id);
   }, [isOnline]);
 
-  const updateStatus = async (requestId: string, newStatus: string, newEta?: number) => {
+  const updateStatus = async (
+    requestId: string,
+    newStatus: string,
+    extra?: Record<string, unknown>
+  ) => {
     setUpdatingId(requestId);
     setError(null);
     try {
       const res = await fetch(`/api/tech/${requestId}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          status: newStatus,
-          ...(newEta != null ? { estimatedMinutes: newEta } : {}),
-        }),
+        body: JSON.stringify({ status: newStatus, ...extra }),
       });
       if (!res.ok) throw new Error("Σφάλμα ενημέρωσης");
       if (newStatus === "COMPLETED") {
         setJobs((prev) => prev.filter((j) => j.id !== requestId));
       } else {
-        setJobs((prev) =>
-          prev.map((j) =>
-            j.id === requestId
-              ? { ...j, status: newStatus, ...(newEta != null ? { estimatedMinutes: newEta } : {}) }
-              : j
-          )
-        );
+        setJobs((prev) => prev.map((j) =>
+          j.id === requestId ? { ...j, status: newStatus } : j
+        ));
       }
     } catch (e: any) {
       setError(e.message);
@@ -187,15 +189,26 @@ export default function TechDashboard({
   const handleAction = (job: Job) => {
     const next = NEXT_STATUS[job.status];
     if (!next) return;
-    // Show ETA confirm modal before going EN_ROUTE
+
     if (next === "EN_ROUTE") {
       const distKm = myLoc ? haversineKm(myLoc.lat, myLoc.lng, job.latitude, job.longitude) : null;
-      const suggestedEta = distKm != null
-        ? Math.max(5, Math.round(distKm * 3 / 5) * 5)
-        : (job.estimatedMinutes ?? 30);
-      setEtaConfirm({ job, eta: suggestedEta });
+      const suggested = distKm != null ? Math.max(5, Math.round(distKm * 3 / 5) * 5) : (job.estimatedMinutes ?? 30);
+      setEtaConfirm({ job, eta: suggested });
       return;
     }
+
+    if (next === "COMPLETED") {
+      setCompleteConfirm({
+        job,
+        batteryAh:     job.serviceType === "BATTERY_REPLACEMENT" ? 55 : null,
+        batteryBrand:  "",
+        paymentMethod: "CASH",
+        finalPrice:    job.estimatedPrice ?? 0,
+        notes:         "",
+      });
+      return;
+    }
+
     updateStatus(job.id, next);
   };
 
@@ -216,10 +229,9 @@ export default function TechDashboard({
     <main className="min-h-screen bg-slate-950 text-white p-4 md:p-6">
       <div className="max-w-lg mx-auto">
 
-        {/* New job alert */}
         {newJobAlert && (
           <div className="mb-4 bg-purple-500/20 border border-purple-500/40 rounded-2xl p-4 flex items-center gap-3 animate-pulse">
-            <span className="text-2xl">🔔</span>
+            <span className="text-2xl">\u{1F514}</span>
             <div>
               <div className="font-semibold text-purple-300">Νέο Job ανατέθηκε!</div>
               <div className="text-xs text-slate-400">Ελέγξτε τα Ανατεθειμένα παρακάτω</div>
@@ -230,9 +242,7 @@ export default function TechDashboard({
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-amber-600 flex items-center justify-center text-lg font-bold shadow-lg shadow-amber-900/30">
-              🔧
-            </div>
+            <div className="w-11 h-11 rounded-xl bg-amber-600 flex items-center justify-center text-lg font-bold shadow-lg shadow-amber-900/30">\u{1F527}</div>
             <div>
               <h1 className="font-bold text-base">{userName}</h1>
               <p className="text-slate-500 text-xs">
@@ -254,54 +264,44 @@ export default function TechDashboard({
           </button>
         </div>
 
-        {/* Stats */}
         <div className="grid grid-cols-3 gap-3 mb-6">
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-4 text-center">
-            <div className="text-2xl font-bold text-amber-400">{jobs.length}</div>
-            <div className="text-slate-500 text-xs mt-1">Ενεργά</div>
-          </div>
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-4 text-center">
-            <div className="text-2xl font-bold text-blue-400">{completedTotal}</div>
-            <div className="text-slate-500 text-xs mt-1">Σύνολο</div>
-          </div>
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-4 text-center">
-            <div className="text-2xl font-bold text-yellow-400">
-              {techProfile?.rating.toFixed(1) ?? "—"}
+          {[
+            { label: "Ενεργά",   value: jobs.length,                             color: "text-amber-400" },
+            { label: "Σύνολο",   value: completedTotal,                           color: "text-blue-400"  },
+            { label: "Rating ⭐", value: techProfile?.rating.toFixed(1) ?? "—", color: "text-yellow-400" },
+          ].map((s) => (
+            <div key={s.label} className="bg-white/5 border border-white/10 rounded-2xl p-4 text-center">
+              <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
+              <div className="text-slate-500 text-xs mt-1">{s.label}</div>
             </div>
-            <div className="text-slate-500 text-xs mt-1">Rating ⭐</div>
-          </div>
+          ))}
         </div>
 
         {error && (
-          <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-sm text-red-400 mb-4">
-            {error}
-          </div>
+          <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-sm text-red-400 mb-4">{error}</div>
         )}
 
-        {/* Active Jobs */}
         <div className="mb-6">
           <h2 className="font-semibold mb-3 flex items-center gap-2 text-sm">
-            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
             Ανατεθειμένα ({jobs.length})
           </h2>
           {jobs.length === 0 ? (
             <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center text-slate-500">
-              <div className="text-3xl mb-2">😴</div>
+              <div className="text-3xl mb-2">\u{1F634}</div>
               <p className="text-sm">Δεν υπάρχουν ενεργά jobs</p>
             </div>
           ) : (
             <div className="space-y-3">
               {jobs.map((job) => {
-                const distKm = myLoc
-                  ? haversineKm(myLoc.lat, myLoc.lng, job.latitude, job.longitude)
-                  : null;
+                const distKm = myLoc ? haversineKm(myLoc.lat, myLoc.lng, job.latitude, job.longitude) : null;
                 return (
                   <div key={job.id} className="bg-white/5 border border-white/10 rounded-2xl p-4">
                     <div className="flex items-start justify-between gap-2 mb-3">
                       <div>
                         <div className="font-semibold">{job.customer.name}</div>
                         <a href={`tel:${job.customer.phone}`} className="text-sm text-blue-400 hover:text-blue-300">
-                          📞 {job.customer.phone}
+                          \u{1F4DE} {job.customer.phone}
                         </a>
                       </div>
                       <span className={`text-xs px-2.5 py-1 rounded-full shrink-0 font-medium ${
@@ -312,40 +312,26 @@ export default function TechDashboard({
                     </div>
 
                     <div className="space-y-1 text-sm text-slate-300 mb-3">
-                      <div>🚗 {job.vehicle.make} {job.vehicle.model} · <span className="font-mono">{job.vehicle.licensePlate}</span></div>
-                      <div>🔧 {SERVICE_LABELS[job.serviceType] ?? job.serviceType}</div>
-                      {job.address && <div>📍 {job.address}</div>}
+                      <div>\u{1F697} {job.vehicle.make} {job.vehicle.model} · <span className="font-mono">{job.vehicle.licensePlate}</span></div>
+                      <div>\u{1F527} {SERVICE_LABELS[job.serviceType] ?? job.serviceType}</div>
+                      {job.address && <div>\u{1F4CD} {job.address}</div>}
                       {job.status === "ACCEPTED" && (
                         <div className="flex items-center gap-3">
-                          {job.estimatedMinutes != null && (
-                            <span className="text-cyan-300">⏱ ETA admin: {job.estimatedMinutes} λεπτ.</span>
-                          )}
-                          {distKm != null && (
-                            <span className="text-slate-400">📏 {distKm.toFixed(1)} km από σας</span>
-                          )}
+                          {job.estimatedMinutes != null && <span className="text-cyan-300">⏱ ETA admin: {job.estimatedMinutes} λεπτ.</span>}
+                          {distKm != null && <span className="text-slate-400">\u{1F4CF} {distKm.toFixed(1)} km</span>}
                         </div>
                       )}
-                      {job.estimatedPrice != null && (
-                        <div className="text-purple-300 font-medium">💰 {job.estimatedPrice}€</div>
-                      )}
+                      {job.estimatedPrice != null && <div className="text-purple-300 font-medium">\u{1F4B0} {job.estimatedPrice}€</div>}
                     </div>
 
                     <div className="flex gap-2">
-                      <a
-                        href={`https://maps.google.com/?q=${job.latitude},${job.longitude}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex-1 bg-blue-700/30 hover:bg-blue-700/50 text-blue-300 text-sm font-medium py-2.5 rounded-xl transition text-center"
-                      >
-                        🗺️ Maps
+                      <a href={`https://maps.google.com/?q=${job.latitude},${job.longitude}`} target="_blank" rel="noopener noreferrer"
+                        className="flex-1 bg-blue-700/30 hover:bg-blue-700/50 text-blue-300 text-sm font-medium py-2.5 rounded-xl transition text-center">
+                        \u{1F5FA}️ Maps
                       </a>
-                      <a
-                        href={`https://waze.com/ul?ll=${job.latitude},${job.longitude}&navigate=yes`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex-1 bg-cyan-700/30 hover:bg-cyan-700/50 text-cyan-300 text-sm font-medium py-2.5 rounded-xl transition text-center"
-                      >
-                        🚗 Waze
+                      <a href={`https://waze.com/ul?ll=${job.latitude},${job.longitude}&navigate=yes`} target="_blank" rel="noopener noreferrer"
+                        className="flex-1 bg-cyan-700/30 hover:bg-cyan-700/50 text-cyan-300 text-sm font-medium py-2.5 rounded-xl transition text-center">
+                        \u{1F697} Waze
                       </a>
                       {NEXT_STATUS[job.status] && (
                         <button
@@ -353,11 +339,7 @@ export default function TechDashboard({
                           disabled={updatingId === job.id}
                           className="flex-1 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-sm font-semibold py-2.5 rounded-xl transition"
                         >
-                          {updatingId === job.id
-                            ? "..."
-                            : job.status === "ACCEPTED"
-                            ? "🚗 Εκκινώ"
-                            : (NEXT_LABEL[job.status] ?? "Επόμενο")}
+                          {updatingId === job.id ? "..." : job.status === "ACCEPTED" ? "\u{1F697} Εκκινώ" : (NEXT_LABEL[job.status] ?? "Επόμενο")}
                         </button>
                       )}
                     </div>
@@ -368,20 +350,15 @@ export default function TechDashboard({
           )}
         </div>
 
-        {/* Pending unassigned */}
         {pendingJobs.length > 0 && (
           <div className="mb-6">
-            <h2 className="font-semibold mb-3 text-sm text-slate-400">
-              Αναμονή Ανάθεσης ({pendingJobs.length})
-            </h2>
+            <h2 className="font-semibold mb-3 text-sm text-slate-400">Αναμονή Ανάθεσης ({pendingJobs.length})</h2>
             <div className="space-y-2">
               {pendingJobs.map((job) => (
                 <div key={job.id} className="bg-white/3 border border-white/5 rounded-xl p-3 flex items-center justify-between gap-2">
                   <div>
                     <div className="text-sm font-medium">{SERVICE_LABELS[job.serviceType] ?? job.serviceType}</div>
-                    <div className="text-xs text-slate-500">
-                      {job.address ?? `${job.latitude.toFixed(3)}, ${job.longitude.toFixed(3)}`}
-                    </div>
+                    <div className="text-xs text-slate-500">{job.address ?? `${job.latitude.toFixed(3)}, ${job.longitude.toFixed(3)}`}</div>
                   </div>
                   <span className="text-xs text-slate-600 shrink-0">
                     {new Date(job.createdAt).toLocaleTimeString("el-GR", { hour: "2-digit", minute: "2-digit" })}
@@ -393,86 +370,165 @@ export default function TechDashboard({
         )}
 
         <div className="text-center mt-8 space-y-2">
-          <p className="text-slate-700 text-xs">
-            Τελ. ανανέωση: {lastRefresh.toLocaleTimeString("el-GR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-          </p>
-          <button
-            onClick={() => signOut({ callbackUrl: "/login" })}
-            className="text-slate-600 hover:text-slate-400 text-xs transition"
-          >
+          <p className="text-slate-700 text-xs">Τελ. ανανέωση: {lastRefresh.toLocaleTimeString("el-GR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</p>
+          <button onClick={() => signOut({ callbackUrl: "/login" })} className="text-slate-600 hover:text-slate-400 text-xs transition">
             Αποσύνδεση
           </button>
         </div>
       </div>
 
-      {/* ETA confirm modal — shown when tech presses Εκκινώ */}
+      {/* ETA confirm modal */}
       {etaConfirm && (() => {
         const { job, eta } = etaConfirm;
-        const distKm = myLoc
-          ? haversineKm(myLoc.lat, myLoc.lng, job.latitude, job.longitude)
-          : null;
+        const distKm = myLoc ? haversineKm(myLoc.lat, myLoc.lng, job.latitude, job.longitude) : null;
         return (
           <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-4">
             <div className="bg-slate-900 border border-white/10 rounded-2xl p-6 w-full max-w-sm">
               <h3 className="text-lg font-bold mb-1">Επιβεβαίωση Εκκίνησης</h3>
-              <p className="text-slate-400 text-sm mb-5">
-                {job.customer.name} · {job.address ?? `${job.latitude.toFixed(4)}, ${job.longitude.toFixed(4)}`}
-              </p>
-
+              <p className="text-slate-400 text-sm mb-5">{job.customer.name} · {job.address ?? `${job.latitude.toFixed(4)}, ${job.longitude.toFixed(4)}`}</p>
               {(distKm != null || job.estimatedMinutes != null) && (
                 <div className="bg-slate-800 rounded-xl p-3 mb-5 flex gap-4 text-sm">
-                  {distKm != null && (
-                    <div className="text-center flex-1">
-                      <div className="text-lg font-bold text-blue-300">{distKm.toFixed(1)} km</div>
-                      <div className="text-slate-500 text-xs">Απόσταση</div>
-                    </div>
-                  )}
-                  {job.estimatedMinutes != null && (
-                    <div className="text-center flex-1">
-                      <div className="text-lg font-bold text-slate-400">{job.estimatedMinutes} λεπτ.</div>
-                      <div className="text-slate-500 text-xs">ETA admin</div>
-                    </div>
-                  )}
+                  {distKm != null && <div className="text-center flex-1"><div className="text-lg font-bold text-blue-300">{distKm.toFixed(1)} km</div><div className="text-slate-500 text-xs">Απόσταση</div></div>}
+                  {job.estimatedMinutes != null && <div className="text-center flex-1"><div className="text-lg font-bold text-slate-400">{job.estimatedMinutes} λεπτ.</div><div className="text-slate-500 text-xs">ETA admin</div></div>}
                 </div>
               )}
-
               <div className="mb-6">
                 <div className="text-xs text-slate-500 uppercase tracking-wider mb-3">Εκτίμησέ σου (λεπτά)</div>
                 <div className="flex items-center gap-3 justify-center">
-                  <button
-                    onClick={() => setEtaConfirm((p) => p ? { ...p, eta: Math.max(5, p.eta - 5) } : p)}
-                    className="w-12 h-12 rounded-xl bg-white/10 hover:bg-white/20 text-xl font-bold transition"
-                  >
-                    −
-                  </button>
-                  <div className="text-4xl font-bold text-purple-300 w-24 text-center">
-                    {eta}
+                  <button onClick={() => setEtaConfirm((p) => p ? { ...p, eta: Math.max(5, p.eta - 5) } : p)}
+                    className="w-12 h-12 rounded-xl bg-white/10 hover:bg-white/20 text-xl font-bold transition">−</button>
+                  <div className="text-4xl font-bold text-purple-300 w-24 text-center">{eta}</div>
+                  <button onClick={() => setEtaConfirm((p) => p ? { ...p, eta: Math.min(180, p.eta + 5) } : p)}
+                    className="w-12 h-12 rounded-xl bg-white/10 hover:bg-white/20 text-xl font-bold transition">+</button>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => setEtaConfirm(null)} className="flex-1 py-3 rounded-xl bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10 transition text-sm">Ακύρωση</button>
+                <button onClick={() => { updateStatus(job.id, "EN_ROUTE", { estimatedMinutes: eta }); setEtaConfirm(null); }}
+                  disabled={updatingId === job.id}
+                  className="flex-1 py-3 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-semibold transition text-sm">
+                  \u{1F697} Εκκινώ →
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Completion modal */}
+      {completeConfirm && (() => {
+        const c = completeConfirm;
+        const isBattery = c.job.serviceType === "BATTERY_REPLACEMENT";
+        return (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-4">
+            <div className="bg-slate-900 border border-white/10 rounded-2xl p-6 w-full max-w-sm max-h-[92vh] overflow-y-auto">
+              <h3 className="text-lg font-bold mb-1">Ολοκλήρωση Εργασίας</h3>
+              <p className="text-slate-400 text-sm mb-5">
+                {SERVICE_LABELS[c.job.serviceType]} · {c.job.customer.name} · <span className="font-mono">{c.job.vehicle.licensePlate}</span>
+              </p>
+
+              {/* Battery picker */}
+              {isBattery && (
+                <div className="mb-5">
+                  <div className="text-xs text-slate-500 uppercase tracking-wider mb-2">Επιλογή Μπαταρίας</div>
+                  <div className="grid grid-cols-3 gap-2 mb-3">
+                    {BATTERY_TIERS.map((tier) => {
+                      const price = (c.job.estimatedPrice ?? 49) + tier.surcharge;
+                      return (
+                        <button
+                          key={tier.ah}
+                          onClick={() => setCompleteConfirm((p) => p ? { ...p, batteryAh: tier.ah, finalPrice: price } : p)}
+                          className={`p-3 rounded-xl border text-center transition ${
+                            c.batteryAh === tier.ah
+                              ? "bg-purple-600/30 border-purple-500/60 text-white"
+                              : "bg-white/5 border-white/10 text-slate-300 hover:bg-white/10"
+                          }`}
+                        >
+                          <div className="font-bold text-sm">{tier.label}</div>
+                          <div className="text-xs text-slate-400 mt-0.5">{tier.sublabel}</div>
+                          <div className="text-xs font-mono mt-1 text-purple-300">{price}€</div>
+                        </button>
+                      );
+                    })}
                   </div>
-                  <button
-                    onClick={() => setEtaConfirm((p) => p ? { ...p, eta: Math.min(180, p.eta + 5) } : p)}
-                    className="w-12 h-12 rounded-xl bg-white/10 hover:bg-white/20 text-xl font-bold transition"
-                  >
-                    +
-                  </button>
+                  <input
+                    type="text"
+                    value={c.batteryBrand}
+                    onChange={(e) => setCompleteConfirm((p) => p ? { ...p, batteryBrand: e.target.value } : p)}
+                    placeholder="Μάρκα/Μοντέλο (προαιρ.)  π.χ. Varta Blue Dynamic"
+                    className="w-full bg-slate-800 border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-purple-500 transition"
+                  />
+                </div>
+              )}
+
+              {/* Payment method */}
+              <div className="mb-5">
+                <div className="text-xs text-slate-500 uppercase tracking-wider mb-2">Τρόπος Πληρωμής</div>
+                <div className="grid grid-cols-2 gap-3">
+                  {(["CASH", "CARD"] as const).map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => setCompleteConfirm((p) => p ? { ...p, paymentMethod: m } : p)}
+                      className={`p-4 rounded-xl border text-center transition ${
+                        c.paymentMethod === m
+                          ? "bg-green-600/20 border-green-500/50 text-green-300"
+                          : "bg-white/5 border-white/10 text-slate-300 hover:bg-white/10"
+                      }`}
+                    >
+                      <div className="text-2xl mb-1">{m === "CASH" ? "\u{1F4B5}" : "\u{1F4B3}"}</div>
+                      <div className="text-sm font-medium">{m === "CASH" ? "Μετρητά" : "Κάρτα POS"}</div>
+                    </button>
+                  ))}
                 </div>
               </div>
 
+              {/* Final price */}
+              <div className="mb-5">
+                <div className="text-xs text-slate-500 uppercase tracking-wider mb-2">Τελική Τιμή</div>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={c.finalPrice || ""}
+                    onChange={(e) => setCompleteConfirm((p) => p ? { ...p, finalPrice: Number(e.target.value) } : p)}
+                    className="flex-1 bg-slate-800 border border-white/10 rounded-xl px-3 py-2.5 text-center text-2xl font-bold focus:outline-none focus:border-purple-500 transition"
+                  />
+                  <span className="text-2xl text-slate-400">€</span>
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div className="mb-6">
+                <textarea
+                  value={c.notes}
+                  onChange={(e) => setCompleteConfirm((p) => p ? { ...p, notes: e.target.value } : p)}
+                  placeholder="Σημειώσεις τεχνικού (προαιρετικό)"
+                  rows={2}
+                  className="w-full bg-slate-800 border border-white/10 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:border-purple-500 transition"
+                />
+              </div>
+
               <div className="flex gap-3">
-                <button
-                  onClick={() => setEtaConfirm(null)}
-                  className="flex-1 py-3 rounded-xl bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10 transition text-sm"
-                >
+                <button onClick={() => setCompleteConfirm(null)}
+                  className="flex-1 py-3 rounded-xl bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10 transition text-sm">
                   Ακύρωση
                 </button>
                 <button
+                  disabled={!c.finalPrice || updatingId === c.job.id}
                   onClick={() => {
-                    updateStatus(job.id, "EN_ROUTE", eta);
-                    setEtaConfirm(null);
+                    updateStatus(c.job.id, "COMPLETED", {
+                      finalPrice:     c.finalPrice,
+                      paymentMethod:  c.paymentMethod,
+                      batteryAh:      c.batteryAh,
+                      batteryBrand:   c.batteryBrand || null,
+                      technicianNotes: c.notes || null,
+                    });
+                    setCompleteConfirm(null);
                   }}
-                  disabled={updatingId === job.id}
-                  className="flex-1 py-3 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-semibold transition text-sm"
+                  className="flex-1 py-3 rounded-xl bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-semibold transition text-sm"
                 >
-                  🚗 Εκκινώ →
+                  {updatingId === c.job.id ? "..." : "✅ Ολοκλήρωση"}
                 </button>
               </div>
             </div>
