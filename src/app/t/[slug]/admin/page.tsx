@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { canAccessTenant } from "@/lib/tenant";
 import Link from "next/link";
 import LogoutButton from "@/components/LogoutButton";
+import LogoUpload from "@/components/LogoUpload";
 
 export const dynamic = "force-dynamic";
 
@@ -175,6 +176,11 @@ export default async function TenantAdminPage({ params }: { params: { slug: stri
             </div>
           </Link>
         )}
+
+        {/* Logo Upload */}
+        <div className="mb-6 max-w-md">
+          <LogoUpload tenantSlug={params.slug} initialLogo={tenant.logoUrl} tenantName={tenant.name} />
+        </div>
 
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
