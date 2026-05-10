@@ -3,7 +3,6 @@ import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
-// Disable body parsing — stripe needs raw body for signature verification
 export async function POST(req: NextRequest) {
   if (!process.env.STRIPE_SECRET_KEY || !process.env.STRIPE_WEBHOOK_SECRET) {
     return NextResponse.json({ error: "Stripe not configured" }, { status: 400 });
@@ -20,39 +19,78 @@ export async function POST(req: NextRequest) {
 
     if (event.type === "checkout.session.completed") {
       const session = event.data.object as any;
-      const { jobId, tenantId } = session.metadata ?? {};
+      const { jobId } = session.metadata ?? {};
 
       if (jobId) {
         const paidAmount = session.amount_total ? session.amount_total / 100 : undefined;
 
-        // Mark payment as completed
         await prisma.payment.updateMany({
           where: { requestId: jobId, stripePaymentId: session.id },
           data: {
-            status:         "COMPLETED",
+            status: "COMPLETED",
             stripePaymentId: session.payment_intent ?? session.id,
             ...(paidAmount ? { amount: paidAmount } : {}),
           },
         });
 
-        // Store final price on the service request
         if (paidAmount) {
           await prisma.serviceRequest.update({
             where: { id: jobId },
-            data:  { finalPrice: paidAmount },
+            data: { finalPrice: paidAmount },
           });
+
+          // Create payout record for the tenant
+          const job = await prisma.serviceRequest.findUnique({
+            where: { id: jobId },
+            select: {
+              tenantId: true,
+              tenant: {
+                select: {
+                  plan: true,
+                  planActiveUntil: true,
+                  payoutMethod: true,
+                  platformFeePercent: true,
+                },
+              },
+            },
+          });
+
+          if (job?.tenantId && job.tenant) {
+            const { plan, planActiveUntil, payoutMethod, platformFeePercent } = job.tenant;
+            const hasActiveSub = planActiveUntil ? planActiveUntil > new Date() : false;
+            const planUpper = plan.toUpperCase();
+            const isSubscribed = hasActiveSub && (planUpper === "PRO" || planUpper === "ENTERPRISE");
+
+            const feePercent = isSubscribed ? 0 : (platformFeePercent ?? 8);
+            const feeAmount = Math.round(paidAmount * feePercent) / 100;
+            const netAmount = paidAmount - feeAmount;
+            const method = isSubscribed ? "SUBSCRIPTION_OFFSET" : (payoutMethod ?? "BANK_TRANSFER");
+            const status = isSubscribed ? "OFFSET" : "PENDING";
+
+            await prisma.tenantPayout.create({
+              data: {
+                tenantId: job.tenantId,
+                jobId,
+                grossAmountEur: paidAmount,
+                feePercent,
+                feeAmountEur: feeAmount,
+                netAmountEur: netAmount,
+                method,
+                status,
+              },
+            });
+          }
         }
       }
     }
 
     if (event.type === "checkout.session.expired") {
-      // Clean up expired pending payment so customer can try again
       const session = event.data.object as any;
       const jobId = session.metadata?.jobId;
       if (jobId) {
         await prisma.payment.updateMany({
           where: { requestId: jobId, stripePaymentId: session.id, status: "PENDING" },
-          data:  { status: "FAILED" },
+          data: { status: "FAILED" },
         });
       }
     }
