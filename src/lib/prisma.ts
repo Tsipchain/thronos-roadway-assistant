@@ -2,20 +2,17 @@ import { PrismaClient } from '@prisma/client';
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
-export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
-    log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-    datasources: {
-      db: {
-        url: process.env.DATABASE_URL,
-      },
-    },
+function makePrisma() {
+  return new PrismaClient({
+    log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
   });
+}
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+// Cache in globalThis for ALL envs — prevents connection churn on hot reload
+// and ensures a single client per process on Railway/long-running servers.
+export const prisma = globalForPrisma.prisma ?? makePrisma();
+globalForPrisma.prisma = prisma;
 
-// Graceful shutdown
 if (typeof process !== 'undefined') {
   process.on('beforeExit', async () => {
     await prisma.$disconnect();

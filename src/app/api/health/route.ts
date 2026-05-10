@@ -1,40 +1,14 @@
-import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { redis } from "@/lib/redis";
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
 
-export const dynamic = 'force-dynamic';
-
-export async function GET() {
-  const checks: Record<string, string> = {};
-
+// Simple liveness probe that also wakes the Neon DB connection.
+export async function GET(_req: NextRequest) {
   try {
     await prisma.$queryRaw`SELECT 1`;
-    checks.database = "ok";
-  } catch {
-    checks.database = "error";
+    return NextResponse.json({ ok: true, db: 'connected' });
+  } catch (e: any) {
+    // Force reconnect on next request
+    try { await prisma.$disconnect(); } catch {}
+    return NextResponse.json({ ok: false, error: e.message }, { status: 503 });
   }
-
-  if (redis) {
-    try {
-      await redis.ping();
-      checks.redis = "ok";
-    } catch {
-      checks.redis = "error";
-    }
-  } else {
-    checks.redis = "not_configured";
-  }
-
-  const allOk = Object.values(checks).every((v) => v === "ok" || v === "not_configured");
-
-  return NextResponse.json(
-    {
-      ok: allOk,
-      status: allOk ? "healthy" : "degraded",
-      checks,
-      timestamp: new Date().toISOString(),
-      version: "1.0.0",
-    },
-    { status: allOk ? 200 : 503 }
-  );
 }
