@@ -20,7 +20,43 @@ export default function ManageSubscriptionForm({ companyId, company }: Props) {
   const [extendDays, setExtendDays] = useState(30);
   const [autoRenewal, setAutoRenewal] = useState(true);
 
-  const handleExtendSubscription = async () => {
+  // Invoice state
+  const [invoiceAmount, setInvoiceAmount] = useState(30);
+  const [invoiceDays, setInvoiceDays] = useState(30);
+  const [invoiceDesc, setInvoiceDesc] = useState("");
+  const [invoiceResult, setInvoiceResult] = useState<{ url: string; id: string; amount: number } | null>(null);
+
+  const handleCreateInvoice = async () => {
+    setLoading(true);
+    setMessage("");
+    setInvoiceResult(null);
+
+    try {
+      const response = await fetch("/api/admin/subscriptions/invoice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          companyId,
+          amountEur: invoiceAmount,
+          planDays: invoiceDays,
+          description: invoiceDesc || undefined,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setInvoiceResult({ url: data.invoiceUrl, id: data.invoiceId, amount: data.amountDue });
+        setMessage(`✓ Τιμολόγιο δημιουργήθηκε και εστάλη στο email του tenant.`);
+      } else {
+        setMessage(`✗ ${data.message || "Failed to create invoice"}`);
+      }
+    } catch {
+      setMessage("✗ Failed to create invoice");
+    } finally {
+      setLoading(false);
+    }
+  };
     setLoading(true);
     setMessage("");
 
@@ -121,6 +157,70 @@ export default function ManageSubscriptionForm({ companyId, company }: Props) {
       )}
 
       <div className="space-y-6">
+
+        {/* Invoice via Stripe */}
+        <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-xl p-5">
+          <h3 className="font-semibold text-indigo-300 mb-4">💳 Έκδοση Τιμολογίου μέσω Stripe</h3>
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div>
+              <label className="block text-xs text-slate-400 mb-1">Ποσό (€ με ΦΠΑ 24%)</label>
+              <input
+                type="number"
+                min="1"
+                step="0.01"
+                value={invoiceAmount}
+                onChange={(e) => setInvoiceAmount(parseFloat(e.target.value))}
+                className="w-full bg-white/10 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-slate-400 mb-1">Ημέρες συνδρομής</label>
+              <input
+                type="number"
+                min="1"
+                max="365"
+                value={invoiceDays}
+                onChange={(e) => setInvoiceDays(parseInt(e.target.value))}
+                className="w-full bg-white/10 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+          </div>
+          <div className="mb-3">
+            <label className="block text-xs text-slate-400 mb-1">Περιγραφή (προαιρετικό)</label>
+            <input
+              type="text"
+              value={invoiceDesc}
+              onChange={(e) => setInvoiceDesc(e.target.value)}
+              placeholder={`Συνδρομή ${company.plan} - ${company.name}`}
+              className="w-full bg-white/10 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500"
+            />
+          </div>
+          <button
+            onClick={handleCreateInvoice}
+            disabled={loading || !invoiceAmount}
+            className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-600/40 text-white font-medium py-2.5 rounded-lg transition"
+          >
+            {loading ? "Δημιουργία..." : "📤 Δημιουργία & Αποστολή τιμολογίου"}
+          </button>
+          <p className="text-xs text-slate-500 mt-2">
+            Δημιουργεί τιμολόγιο στο Stripe και το στέλνει αυτόματα στο email του tenant. Προθεσμία πληρωμής: 7 ημέρες.
+          </p>
+          {invoiceResult && (
+            <div className="mt-3 bg-green-500/10 border border-green-500/30 rounded-lg p-3">
+              <p className="text-xs text-green-300 font-medium mb-2">
+                ✓ Τιμολόγιο {invoiceResult.id} · {invoiceResult.amount.toFixed(2)}€
+              </p>
+              <a
+                href={invoiceResult.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-indigo-400 hover:underline"
+              >
+                🔗 Προβολή / κοινοποίηση link πληρωμής →
+              </a>
+            </div>
+          )}
+        </div>
 
         {/* Extend Subscription */}
         <div className="border-t border-white/10 pt-6">
