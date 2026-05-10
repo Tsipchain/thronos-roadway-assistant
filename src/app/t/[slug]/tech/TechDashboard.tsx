@@ -1,6 +1,7 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { signOut } from "next-auth/react";
+import { useRouter } from "next/navigation";
 
 const STATUS_LABELS: Record<string, string> = {
   PENDING:     "Εκκρεμεί",
@@ -56,6 +57,7 @@ interface Job {
   longitude: number;
   address: string | null;
   estimatedPrice: number | null;
+  estimatedMinutes: number | null;
   customer: { name: string; phone: string };
   vehicle: { licensePlate: string; make: string; model: string };
   createdAt: string;
@@ -87,11 +89,32 @@ export default function TechDashboard({
   userName,
   slug,
 }: Props) {
-  const [jobs, setJobs]         = useState<Job[]>(activeJobs);
-  const [isOnline, setIsOnline] = useState(techProfile?.isOnline ?? false);
-  const [updatingId, setUpdatingId]         = useState<string | null>(null);
-  const [togglingOnline, setTogglingOnline] = useState(false);
-  const [error, setError]       = useState<string | null>(null);
+  const router = useRouter();
+  const [jobs, setJobs]                   = useState<Job[]>(activeJobs);
+  const [isOnline, setIsOnline]           = useState(techProfile?.isOnline ?? false);
+  const [updatingId, setUpdatingId]       = useState<string | null>(null);
+  const [togglingOnline, setToggling]     = useState(false);
+  const [error, setError]                 = useState<string | null>(null);
+  const [newJobAlert, setNewJobAlert]     = useState(false);
+  const [lastRefresh, setLastRefresh]     = useState(new Date());
+  const prevCountRef                      = useRef(activeJobs.length);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      router.refresh();
+      setLastRefresh(new Date());
+    }, 30_000);
+    return () => clearInterval(id);
+  }, [router]);
+
+  useEffect(() => {
+    setJobs(activeJobs);
+    if (activeJobs.length > prevCountRef.current) {
+      setNewJobAlert(true);
+      setTimeout(() => setNewJobAlert(false), 6000);
+    }
+    prevCountRef.current = activeJobs.length;
+  }, [activeJobs]);
 
   const updateStatus = async (requestId: string, newStatus: string) => {
     setUpdatingId(requestId);
@@ -118,7 +141,7 @@ export default function TechDashboard({
   };
 
   const toggleOnline = async () => {
-    setTogglingOnline(true);
+    setToggling(true);
     try {
       await fetch("/api/tech/location", {
         method: "PATCH",
@@ -127,12 +150,23 @@ export default function TechDashboard({
       });
       setIsOnline((v) => !v);
     } catch {}
-    finally { setTogglingOnline(false); }
+    finally { setToggling(false); }
   };
 
   return (
     <main className="min-h-screen bg-slate-950 text-white p-4 md:p-6">
       <div className="max-w-lg mx-auto">
+
+        {/* New job alert */}
+        {newJobAlert && (
+          <div className="mb-4 bg-purple-500/20 border border-purple-500/40 rounded-2xl p-4 flex items-center gap-3 animate-pulse">
+            <span className="text-2xl">🔔</span>
+            <div>
+              <div className="font-semibold text-purple-300">Νέο Job ανατέθηκε!</div>
+              <div className="text-xs text-slate-400">Ελέγξτε τα Ανατεθειμένα παρακάτω</div>
+            </div>
+          </div>
+        )}
 
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
@@ -220,6 +254,9 @@ export default function TechDashboard({
                     <div>🚗 {job.vehicle.make} {job.vehicle.model} · <span className="font-mono">{job.vehicle.licensePlate}</span></div>
                     <div>🔧 {SERVICE_LABELS[job.serviceType] ?? job.serviceType}</div>
                     {job.address && <div>📍 {job.address}</div>}
+                    {job.status === "ACCEPTED" && job.estimatedMinutes != null && (
+                      <div className="text-cyan-300 font-medium">⏱ Εκτ. άφιξη: {job.estimatedMinutes} λεπτ.</div>
+                    )}
                     {job.estimatedPrice != null && (
                       <div className="text-purple-300 font-medium">💰 {job.estimatedPrice}€</div>
                     )}
@@ -230,9 +267,17 @@ export default function TechDashboard({
                       href={`https://maps.google.com/?q=${job.latitude},${job.longitude}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex-1 bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium py-2.5 rounded-xl transition text-center"
+                      className="flex-1 bg-blue-700/30 hover:bg-blue-700/50 text-blue-300 text-sm font-medium py-2.5 rounded-xl transition text-center"
                     >
-                      🗺️ Χάρτης
+                      🗺️ Maps
+                    </a>
+                    <a
+                      href={`https://waze.com/ul?ll=${job.latitude},${job.longitude}&navigate=yes`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 bg-cyan-700/30 hover:bg-cyan-700/50 text-cyan-300 text-sm font-medium py-2.5 rounded-xl transition text-center"
+                    >
+                      🚗 Waze
                     </a>
                     {NEXT_STATUS[job.status] && (
                       <button
@@ -282,7 +327,10 @@ export default function TechDashboard({
           </div>
         )}
 
-        <div className="text-center mt-8">
+        <div className="text-center mt-8 space-y-2">
+          <p className="text-slate-700 text-xs">
+            Τελ. ανανέωση: {lastRefresh.toLocaleTimeString("el-GR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+          </p>
           <button
             onClick={() => signOut({ callbackUrl: "/login" })}
             className="text-slate-600 hover:text-slate-400 text-xs transition"

@@ -47,13 +47,14 @@ export default async function TenantAdminPage({ params }: { params: { slug: stri
   });
   if (!tenant) notFound();
 
-  const [pendingJobs, completedJobs, recentJobs] = await Promise.all([
+  const [activeJobs, pendingJobs, completedJobs, recentJobs] = await Promise.all([
     prisma.serviceRequest.count({
       where: {
         tenantId: tenant.id,
         status: { in: ["PENDING", "ACCEPTED", "EN_ROUTE", "IN_PROGRESS", "ARRIVED"] },
       },
     }),
+    prisma.serviceRequest.count({ where: { tenantId: tenant.id, status: "PENDING" } }),
     prisma.serviceRequest.count({ where: { tenantId: tenant.id, status: "COMPLETED" } }),
     prisma.serviceRequest.findMany({
       where: { tenantId: tenant.id },
@@ -103,6 +104,16 @@ export default async function TenantAdminPage({ params }: { params: { slug: stri
               👥 Ομάδα ({tenant.technicians.length})
             </Link>
             <Link
+              href={`/t/${params.slug}/admin/jobs`}
+              className={`text-sm px-4 py-2 rounded-xl transition border ${
+                pendingJobs > 0
+                  ? "bg-amber-500/20 border-amber-500/40 text-amber-300 hover:bg-amber-500/30 font-semibold"
+                  : "bg-white/5 border-white/10 text-slate-300 hover:bg-white/10"
+              }`}
+            >
+              📋 Jobs{pendingJobs > 0 ? ` (${pendingJobs} νέα)` : ""}
+            </Link>
+            <Link
               href={`/t/${params.slug}/admin/qr`}
               className="text-sm bg-white/5 border border-white/10 px-4 py-2 rounded-xl hover:bg-white/10 transition"
             >
@@ -135,7 +146,7 @@ export default async function TenantAdminPage({ params }: { params: { slug: stri
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           {[
             { label: "Τεχνικοί Online", value: onlineTechs,                color: "text-green-400" },
-            { label: "Ενεργά Jobs",     value: pendingJobs,                color: "text-amber-400" },
+            { label: "Ενεργά Jobs",     value: activeJobs,                 color: "text-amber-400" },
             { label: "Ολοκληρωμένα",   value: completedJobs,              color: "text-blue-400" },
             { label: "Περιοχές",       value: tenant.serviceAreas.length, color: "text-purple-400" },
           ].map((s) => (
@@ -212,12 +223,20 @@ export default async function TenantAdminPage({ params }: { params: { slug: stri
         <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
           <div className="flex justify-between items-center mb-5">
             <h2 className="font-semibold">Πρόσφατα Jobs</h2>
-            <Link
-              href={`/t/${params.slug}/admin/stats`}
-              className="text-xs text-blue-400 hover:text-blue-300 transition"
-            >
-              στατιστικά →
-            </Link>
+            <div className="flex gap-3">
+              <Link
+                href={`/t/${params.slug}/admin/jobs`}
+                className="text-xs text-amber-400 hover:text-amber-300 transition"
+              >
+                διαχείριση →
+              </Link>
+              <Link
+                href={`/t/${params.slug}/admin/stats`}
+                className="text-xs text-blue-400 hover:text-blue-300 transition"
+              >
+                στατιστικά →
+              </Link>
+            </div>
           </div>
           {recentJobs.length === 0 ? (
             <div className="text-center py-10 text-slate-500">
@@ -246,7 +265,14 @@ export default async function TenantAdminPage({ params }: { params: { slug: stri
                       </td>
                       <td className="py-3 font-mono text-slate-300">{j.vehicle.licensePlate}</td>
                       <td className="py-3 text-slate-300">{SERVICE_LABELS[j.serviceType] ?? j.serviceType}</td>
-                      <td className="py-3 text-slate-400">{j.technician?.name ?? <span className="text-slate-600">—</span>}</td>
+                      <td className="py-3">
+                        {j.technician?.name
+                          ? <span className="text-slate-300">{j.technician.name}</span>
+                          : j.status === "PENDING"
+                            ? <Link href={`/t/${params.slug}/admin/jobs`} className="text-amber-400 hover:text-amber-300 text-xs font-medium">Ανάθεση →</Link>
+                            : <span className="text-slate-600">—</span>
+                        }
+                      </td>
                       <td className="py-3">
                         <span className={`text-xs px-2 py-1 rounded-full ${STATUS_COLORS[j.status] ?? "bg-white/10"}`}>
                           {j.status}
