@@ -18,7 +18,7 @@ export async function GET(req: NextRequest, { params }: { params: { slug: string
   if (!tenant) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const technicians = await prisma.technicianProfile.findMany({
-    where: { tenantId: tenant.id },
+    where: { companyId: tenant.id },
     include: { user: { select: { id: true, name: true, email: true, phone: true } } },
     orderBy: { totalJobs: "desc" },
   });
@@ -33,10 +33,10 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
   // Plan limit check
   const plan = getPlan(tenant.plan);
   if (!isUnlimited(plan.maxTechnicians)) {
-    const count = await prisma.technicianProfile.count({ where: { tenantId: tenant.id } });
+    const count = await prisma.technicianProfile.count({ where: { companyId: tenant.id } });
     if (count >= plan.maxTechnicians) {
       return NextResponse.json({
-        error: `Όριο πλανού: το ${plan.label} επιτρέπει μέχρι ${plan.maxTechnicians} τεχνικούς. Αναβαθμίστε σε Pro ή Enterprise.`,
+        error: `Όριο πλανού: το ${plan.label} επιτρέπει μέχρι ${plan.maxTechnicians} τεχνικούς.`,
         limitReached: true,
       }, { status: 403 });
     }
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
       data: { name, phone, email: emailToUse, passwordHash, role: UserRole.TECHNICIAN, tenantId: tenant.id },
     });
     return tx.technicianProfile.create({
-      data: { userId: user.id, tenantId: tenant.id },
+      data: { userId: user.id, companyId: tenant.id },
       include: { user: { select: { id: true, name: true, email: true, phone: true } } },
     });
   });

@@ -40,10 +40,11 @@ export async function PATCH(
   const tenant = await prisma.partnerCompany.update({
     where: { slug: params.slug },
     data: {
-      ...(name   !== undefined && { name }),
-      ...(phone  !== undefined && { phone: phone || null }),
-      ...(plan   !== undefined && { plan }),
-      ...(status !== undefined && { status }),
+      ...(name    !== undefined && { name }),
+      ...(phone   !== undefined && { phone: phone || null }),
+      // Normalize plan to uppercase to match PLAN_LIMITS keys
+      ...(plan    !== undefined && { plan: plan.toUpperCase() }),
+      ...(status  !== undefined && { status }),
       ...(logoUrl !== undefined && { logoUrl: logoUrl || null }),
     },
   });
