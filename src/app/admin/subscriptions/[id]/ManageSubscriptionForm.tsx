@@ -57,6 +57,8 @@ export default function ManageSubscriptionForm({ companyId, company }: Props) {
       setLoading(false);
     }
   };
+
+  const handleExtendSubscription = async () => {
     setLoading(true);
     setMessage("");
 
