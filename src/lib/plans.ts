@@ -69,12 +69,10 @@ export const PLAN_LIMITS = {
 export type PlanKey = keyof typeof PLAN_LIMITS;
 export const PLAN_KEYS: PlanKey[] = ["STARTER", "PRO", "ENTERPRISE"];
 
+// Normalizes any casing ("starter", "pro", "ENTERPRISE") to the correct key.
 export function getPlan(plan: string) {
-  return PLAN_LIMITS[plan as PlanKey] ?? PLAN_LIMITS.STARTER;
-}
-
-export function techLimit(plan: string): number {
-  return getPlan(plan).maxTechnicians;
+  const key = plan.toUpperCase() as PlanKey;
+  return PLAN_LIMITS[key] ?? PLAN_LIMITS.STARTER;
 }
 
 export function isUnlimited(n: number) {

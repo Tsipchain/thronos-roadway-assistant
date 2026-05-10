@@ -30,7 +30,6 @@ export default async function StatsPage({ params }: { params: { slug: string } }
 
   const plan = getPlan(tenant.plan);
 
-  // Gate: only PRO and ENTERPRISE have stats
   if (!plan.hasStats) {
     return (
       <main className="min-h-screen bg-slate-950 text-white p-6 flex items-center justify-center">
@@ -38,21 +37,22 @@ export default async function StatsPage({ params }: { params: { slug: string } }
           <div className="text-6xl mb-4">📊</div>
           <h1 className="text-2xl font-bold mb-2">Στατιστικά</h1>
           <p className="text-slate-400 mb-6">
-            Τα στατιστικά είναι διαθέσιμα στα πλανά <strong className="text-purple-300">Pro</strong> και <strong className="text-amber-300">Enterprise</strong>.
+            Τα στατιστικά είναι διαθέσιμα στα πλανά{" "}
+            <strong className="text-purple-300">Pro</strong> και <strong className="text-amber-300">Enterprise</strong>.
             Τρέχετε με το <span className="text-blue-300">{plan.label}</span> πλανό.
           </p>
           <div className="bg-purple-500/10 border border-purple-500/30 rounded-2xl p-5 mb-6 text-left">
-            <div className="font-semibold text-purple-300 mb-2">Με το Pro απολαμβάνετε:</div>
-            <ul className="space-y-1 text-sm text-slate-300">
+            <div className="font-semibold text-purple-300 mb-3">Με το Pro απολαμβάνετε:</div>
+            <ul className="space-y-1.5 text-sm text-slate-300">
               <li>✓ Κατανομή jobs ανά κατάσταση</li>
               <li>✓ Γράφημα jobs τελευταίων 7 ημερών</li>
               <li>✓ Έσοδα και τζίρος</li>
               <li>✓ Leaderboard τεχνικών</li>
               <li>✓ Έως 15 τεχνικοί</li>
             </ul>
+            <p className="text-slate-500 text-xs mt-3">149€/μήνα — Επικοινωνήστε με τον διαχειριστή σας.</p>
           </div>
-          <p className="text-slate-500 text-sm">149€/μήνα — Επικοινωνήστε με τον διαχειριστή σας για αναβάθμιση.</p>
-          <Link href={`/t/${params.slug}/admin`} className="mt-4 inline-block text-slate-400 hover:text-white text-sm transition">← Πίσω</Link>
+          <Link href={`/t/${params.slug}/admin`} className="inline-block text-slate-400 hover:text-white text-sm transition">← Πίσω</Link>
         </div>
       </main>
     );
@@ -68,7 +68,7 @@ export default async function StatsPage({ params }: { params: { slug: string } }
       select: { createdAt: true },
     }),
     prisma.technicianProfile.findMany({
-      where: { tenantId: tenant.id },
+      where: { companyId: tenant.id },
       include: { user: { select: { name: true } } },
       orderBy: { totalJobs: "desc" },
     }),
@@ -82,7 +82,8 @@ export default async function StatsPage({ params }: { params: { slug: string } }
   let totalJobs = 0;
   statusGroups.forEach((g) => { statusCounts[g.status] = g._count.status; totalJobs += g._count.status; });
   const completedCount = statusCounts["COMPLETED"] ?? 0;
-  const activeCount = ["PENDING","ACCEPTED","EN_ROUTE","ARRIVED","IN_PROGRESS"].reduce((s, k) => s + (statusCounts[k] ?? 0), 0);
+  const activeCount = ["PENDING","ACCEPTED","EN_ROUTE","ARRIVED","IN_PROGRESS"]
+    .reduce((s, k) => s + (statusCounts[k] ?? 0), 0);
   const totalRevenue = Number(revenueAgg._sum.finalPrice ?? 0);
 
   const days = Array.from({ length: 7 }, (_, i) => {
@@ -104,6 +105,7 @@ export default async function StatsPage({ params }: { params: { slug: string } }
           <Link href={`/t/${params.slug}/admin`} className="text-slate-400 hover:text-white transition">← Admin</Link>
           <span className="text-slate-600">/</span>
           <h1 className="text-xl font-bold">📊 Στατιστικά</h1>
+          <span className="ml-auto text-xs text-slate-500 bg-white/5 px-2.5 py-1 rounded-full">{plan.label}</span>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           {[

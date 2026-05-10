@@ -20,7 +20,7 @@ export default async function TeamPage({ params }: { params: { slug: string } })
   if (!tenant) redirect("/login");
 
   const technicians = await prisma.technicianProfile.findMany({
-    where: { tenantId: tenant.id },
+    where: { companyId: tenant.id },
     include: { user: { select: { id: true, name: true, email: true, phone: true } } },
     orderBy: { totalJobs: "desc" },
   });
