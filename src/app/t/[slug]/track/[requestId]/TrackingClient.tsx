@@ -84,7 +84,8 @@ function PaymentSection({
     true;
 
   const isActive = !["COMPLETED", "CANCELLED", "PENDING"].includes(data.status);
-  if (!isActive && !isPaid) return null;
+  const awaitingCardPayment = data.status === "COMPLETED" && data.payment?.status === "PENDING" && data.payment?.method === "CARD";
+  if (!isActive && !isPaid && !awaitingCardPayment) return null;
   if (!amount || amount <= 0) return null;
 
   const payWithStripe = async () => {
