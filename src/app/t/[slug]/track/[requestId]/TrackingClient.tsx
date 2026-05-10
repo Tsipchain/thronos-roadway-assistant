@@ -73,20 +73,44 @@ function PaymentSection({
   const [copied, setCopied] = useState(false);
   const [cryptoConfirmed, setCryptoConfirmed] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [redirectCount, setRedirectCount] = useState<number | null>(null);
 
   const isPaid = data.payment?.status === "COMPLETED";
   const amount = data.finalPrice ?? data.estimatedPrice;
   const isEnterprise = data.tenant.enterpriseEnabled;
   const hasBtc = !!data.tenant.btcAddress;
   const hasEth = !!data.tenant.ethAddress;
-  const showStripe = !!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ||
-    // fallback: always show Stripe button (API will return error if not configured)
-    true;
+  const showStripe = true;
 
   const isActive = !["COMPLETED", "CANCELLED", "PENDING"].includes(data.status);
   const awaitingCardPayment = data.status === "COMPLETED" && data.payment?.status === "PENDING" && data.payment?.method === "CARD";
   if (!isActive && !isPaid && !awaitingCardPayment) return null;
   if (!amount || amount <= 0) return null;
+
+  // Auto-redirect to Stripe when technician marks job done with CARD
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  useEffect(() => {
+    if (!awaitingCardPayment || isPaid) return;
+
+    setRedirectCount(5);
+    const countInterval = setInterval(() => {
+      setRedirectCount((n) => (n !== null && n > 1 ? n - 1 : null));
+    }, 1000);
+
+    const redirect = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/t/${data.tenant.slug}/jobs/${data.id}/payment-link`, { method: "POST" });
+        const json = await res.json();
+        if (res.ok && json.url) window.location.href = json.url;
+      } catch {}
+    }, 5000);
+
+    return () => {
+      clearInterval(countInterval);
+      clearTimeout(redirect);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [awaitingCardPayment, isPaid]);
 
   const payWithStripe = async () => {
     setLoading(true);
@@ -128,6 +152,25 @@ function PaymentSection({
             <div className="text-sm text-slate-400">{data.payment!.amount}€ · {methodLabel}</div>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  // Auto-redirect countdown screen
+  if (awaitingCardPayment && redirectCount !== null) {
+    return (
+      <div className="bg-indigo-500/10 border border-indigo-500/40 rounded-2xl p-6 mb-4 text-center">
+        <div className="text-5xl mb-3">💳</div>
+        <div className="font-bold text-lg text-indigo-300 mb-1">Μεταφορά στη σελίδα πληρωμής</div>
+        <div className="text-slate-400 text-sm mb-4">Ποσό: <span className="text-white font-semibold">{amount}€</span></div>
+        <div className="text-6xl font-mono font-bold text-indigo-400 mb-4">{redirectCount}</div>
+        <button
+          onClick={payWithStripe}
+          disabled={loading}
+          className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white font-semibold transition"
+        >
+          {loading ? "⚙️ Φόρτωση..." : "💳 Πληρωμή τώρα →"}
+        </button>
       </div>
     );
   }
@@ -308,10 +351,13 @@ export default function TrackingClient({ initial }: { initial: RequestData }) {
   }, [data.id]);
 
   useEffect(() => {
-    if (data.status === "COMPLETED" || data.status === "CANCELLED") return;
+    if (data.status === "CANCELLED") return;
+    // Keep refreshing if COMPLETED but card payment not yet done
+    const paymentDone = !data.payment || data.payment.status === "COMPLETED";
+    if (data.status === "COMPLETED" && paymentDone) return;
     const id = setInterval(refresh, 30_000);
     return () => clearInterval(id);
-  }, [refresh, data.status]);
+  }, [refresh, data.status, data.payment?.status]);
 
   const isCancelled = data.status === "CANCELLED";
   const isCompleted = data.status === "COMPLETED";
