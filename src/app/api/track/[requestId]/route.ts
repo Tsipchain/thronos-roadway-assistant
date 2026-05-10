@@ -1,14 +1,10 @@
-import { notFound } from "next/navigation";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import TrackingClient from "./TrackingClient";
 
-export const dynamic = "force-dynamic";
-
-export default async function TrackingPage({
-  params,
-}: {
-  params: { slug: string; requestId: string };
-}) {
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: { requestId: string } }
+) {
   const request = await prisma.serviceRequest.findUnique({
     where: { id: params.requestId },
     include: {
@@ -18,9 +14,11 @@ export default async function TrackingPage({
     },
   });
 
-  if (!request || request.tenant?.slug !== params.slug) notFound();
+  if (!request) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
 
-  const serialized = {
+  return NextResponse.json({
     id: request.id,
     status: request.status,
     serviceType: request.serviceType,
@@ -30,8 +28,6 @@ export default async function TrackingPage({
     acceptedAt: request.acceptedAt?.toISOString() ?? null,
     technician: request.technician ?? null,
     vehicle: request.vehicle,
-    tenant: request.tenant!,
-  };
-
-  return <TrackingClient initial={serialized} />;
+    tenant: request.tenant,
+  });
 }

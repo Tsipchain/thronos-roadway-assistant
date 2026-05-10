@@ -10,6 +10,9 @@ export async function POST(req: NextRequest) {
       // Guest SOS flow
       phone,
       plate,
+      make: vehicleMake,
+      model: vehicleModel,
+      year: vehicleYear,
       tenantId,
       // Authenticated flow
       customerId: existingCustomerId,
@@ -65,11 +68,23 @@ export async function POST(req: NextRequest) {
           data: {
             userId: customerId,
             licensePlate: normalizedPlate,
-            make: "Άγνωστο",
-            model: "Άγνωστο",
-            year: new Date().getFullYear(),
+            make: vehicleMake ?? "Άγνωστο",
+            model: vehicleModel ?? "Άγνωστο",
+            year: vehicleYear ? parseInt(vehicleYear, 10) : new Date().getFullYear(),
           },
         });
+      } else if (vehicleMake && vehicleModel) {
+        // Update vehicle info if provided and was previously unknown
+        if (vehicle.make === "Άγνωστο" || vehicle.model === "Άγνωστο") {
+          vehicle = await prisma.vehicle.update({
+            where: { id: vehicle.id },
+            data: {
+              make: vehicleMake,
+              model: vehicleModel,
+              year: vehicleYear ? parseInt(vehicleYear, 10) : vehicle.year,
+            },
+          });
+        }
       }
       vehicleId = vehicle.id;
     }
