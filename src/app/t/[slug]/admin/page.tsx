@@ -90,13 +90,23 @@ export default async function TenantAdminPage({ params }: { params: { slug: stri
             </div>
           </div>
           <div className="flex flex-wrap gap-2 items-center">
-            <Link href={`/t/${params.slug}/admin/qr`}
-              className="text-sm bg-white/5 border border-white/10 px-4 py-2 rounded-xl hover:bg-white/10 transition">
-              📱 QR Code
+            <Link
+              href={`/t/${params.slug}/admin/stats`}
+              className="text-sm bg-blue-600/20 border border-blue-500/30 px-4 py-2 rounded-xl hover:bg-blue-600/30 transition text-blue-300"
+            >
+              📊 Στατιστικά
             </Link>
-            <Link href={`/t/${params.slug}/admin/team`}
-              className="text-sm bg-purple-600/20 border border-purple-500/30 px-4 py-2 rounded-xl hover:bg-purple-600/30 transition text-purple-300">
-              👥 Ομάδα {tenant._count.teamMembers > 0 && `(${tenant._count.teamMembers})`}
+            <Link
+              href={`/t/${params.slug}/admin/team`}
+              className="text-sm bg-purple-600/20 border border-purple-500/30 px-4 py-2 rounded-xl hover:bg-purple-600/30 transition text-purple-300"
+            >
+              👥 Ομάδα ({tenant.technicians.length})
+            </Link>
+            <Link
+              href={`/t/${params.slug}/admin/qr`}
+              className="text-sm bg-white/5 border border-white/10 px-4 py-2 rounded-xl hover:bg-white/10 transition"
+            >
+              📱 QR Code
             </Link>
             <Link href={`/t/${params.slug}`} target="_blank"
               className="text-sm bg-white/5 border border-white/10 px-4 py-2 rounded-xl hover:bg-white/10 transition">
@@ -141,7 +151,12 @@ export default async function TenantAdminPage({ params }: { params: { slug: stri
           <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
             <div className="flex justify-between items-center mb-4">
               <h2 className="font-semibold">Τεχνικοί</h2>
-              <span className="text-xs text-slate-500">{tenant.technicians.length} σύνολο</span>
+              <Link
+                href={`/t/${params.slug}/admin/team`}
+                className="text-xs text-purple-400 hover:text-purple-300 transition"
+              >
+                διαχείριση →
+              </Link>
             </div>
             <div className="space-y-3">
               {tenant.technicians.map((tech) => (
@@ -197,7 +212,12 @@ export default async function TenantAdminPage({ params }: { params: { slug: stri
         <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
           <div className="flex justify-between items-center mb-5">
             <h2 className="font-semibold">Πρόσφατα Jobs</h2>
-            <span className="text-xs text-slate-500">τελευταία 15</span>
+            <Link
+              href={`/t/${params.slug}/admin/stats`}
+              className="text-xs text-blue-400 hover:text-blue-300 transition"
+            >
+              στατιστικά →
+            </Link>
           </div>
           {recentJobs.length === 0 ? (
             <div className="text-center py-10 text-slate-500">
