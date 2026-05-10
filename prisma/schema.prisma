@@ -122,6 +122,8 @@ model TechnicianProfile {
   inventoryNote    String?
   companyId        String?
   company          PartnerCompany? @relation(fields: [companyId], references: [id])
+  serviceAreaId    String?
+  serviceArea      ServiceArea?    @relation(fields: [serviceAreaId], references: [id])
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
 }
@@ -311,11 +313,11 @@ model PartnerCompany {
   thrRewardPoolBalance Float  @default(0)
 
   // Payout settings
-  payoutMethod        String  @default("BANK_TRANSFER")  // BANK_TRANSFER | USDC_ETH | USDT_ETH | SUBSCRIPTION_OFFSET
+  payoutMethod        String  @default("BANK_TRANSFER")
   payoutIban          String?
   payoutBic           String?
-  payoutWalletAddress String?  // ETH wallet for USDC/USDT settlements
-  platformFeePercent  Float   @default(8)  // overrideable per tenant
+  payoutWalletAddress String?
+  platformFeePercent  Float   @default(8)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -472,6 +474,8 @@ model ServiceArea {
   isActive        Boolean         @default(true)
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
+
+  technicians TechnicianProfile[]
 
   @@unique([name, city])
   @@index([city, isActive])
