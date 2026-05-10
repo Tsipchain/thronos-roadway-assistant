@@ -51,7 +51,7 @@ export async function POST() {
         },
       });
 
-      // 2. LK Shop Tenant
+      // 2. LK Shop Tenant — μπαταρίες μόνο
       const lkshop = await tx.partnerCompany.create({
         data: {
           name: "LK Shop",
@@ -80,39 +80,32 @@ export async function POST() {
 
       // 4. Technicians
       const techData = [
-        { name: "Νίκος Παπαδόπουλος", phone: "+306971100001", email: "tech1@lkshop.gr", lat: 40.6401, lng: 22.9444 },
-        { name: "Γιώργης Αθανασίου",  phone: "+306971100002", email: "tech2@lkshop.gr", lat: 40.6200, lng: 22.9600 },
-        { name: "Κώστας Δημητρίου",   phone: "+306971100003", email: "tech3@lkshop.gr", lat: 40.6500, lng: 22.9200 },
-        { name: "Παναγιώτης Σταμάτης",phone: "+306971100004", email: "tech4@lkshop.gr", lat: 40.6700, lng: 23.0000 },
-        { name: "Αλέξανδρος Νικολάου",phone: "+306971100005", email: "tech5@lkshop.gr", lat: 40.5900, lng: 22.9100 },
+        { name: "Νίκος Παπαδόπουλος",  phone: "+306971100001", email: "tech1@lkshop.gr", lat: 40.6401, lng: 22.9444 },
+        { name: "Γιώργης Αθανασίου",   phone: "+306971100002", email: "tech2@lkshop.gr", lat: 40.6200, lng: 22.9600 },
+        { name: "Κώστας Δημητρίου",    phone: "+306971100003", email: "tech3@lkshop.gr", lat: 40.6500, lng: 22.9200 },
+        { name: "Παναγιώτης Σταμάτης", phone: "+306971100004", email: "tech4@lkshop.gr", lat: 40.6700, lng: 23.0000 },
+        { name: "Αλέξανδρος Νικολάου", phone: "+306971100005", email: "tech5@lkshop.gr", lat: 40.5900, lng: 22.9100 },
       ];
       const techPw = await hash("Tech2025!", 12);
       for (const t of techData) {
         const user = await tx.user.create({
           data: {
-            email: t.email,
-            phone: t.phone,
-            passwordHash: techPw,
-            name: t.name,
-            role: UserRole.TECHNICIAN,
-            tenantId: lkshop.id,
+            email: t.email, phone: t.phone, passwordHash: techPw,
+            name: t.name, role: UserRole.TECHNICIAN, tenantId: lkshop.id,
           },
         });
         await tx.technicianProfile.create({
           data: {
-            userId: user.id,
-            companyId: lkshop.id,
-            isOnline: true,
-            isAvailable: true,
-            latitude: t.lat,
-            longitude: t.lng,
+            userId: user.id, companyId: lkshop.id,
+            isOnline: true, isAvailable: true,
+            latitude: t.lat, longitude: t.lng,
             specialties: [ServiceType.BATTERY_REPLACEMENT, ServiceType.BATTERY_CHARGE, ServiceType.DIAGNOSIS],
             coverageRadiusKm: 15,
           },
         });
       }
 
-      // 5. Service Areas
+      // 5. Service Areas (batteries + diagnosis)
       const areas = [
         { name: "Κέντρο Θεσσαλονίκης", city: "Thessaloniki", lat: 40.6401, lng: 22.9444, r: 5 },
         { name: "Καλαμαριά",           city: "Thessaloniki", lat: 40.5914, lng: 22.9629, r: 5 },
@@ -126,38 +119,25 @@ export async function POST() {
       for (const a of areas) {
         await tx.serviceArea.create({
           data: {
-            companyId: lkshop.id,
-            name: a.name,
-            city: a.city,
-            country: "GR",
-            centerLatitude: a.lat,
-            centerLongitude: a.lng,
-            radiusKm: a.r,
+            companyId: lkshop.id, name: a.name, city: a.city, country: "GR",
+            centerLatitude: a.lat, centerLongitude: a.lng, radiusKm: a.r,
             serviceTypes: [ServiceType.BATTERY_REPLACEMENT, ServiceType.BATTERY_CHARGE, ServiceType.DIAGNOSIS],
-            slaMinutes: 30,
-            isActive: true,
+            slaMinutes: 30, isActive: true,
           },
         });
       }
 
-      // 6. Pricing Rules
+      // 6. Pricing — μπαταρίες + διάγνωση ΜΟΝΟ (χωρίς λάστιχα)
       const pricing = [
         { type: ServiceType.BATTERY_REPLACEMENT, base: 49 },
         { type: ServiceType.BATTERY_CHARGE,      base: 19 },
-        { type: ServiceType.TIRE_CHANGE,         base: 35 },
-        { type: ServiceType.TIRE_REPAIR,         base: 25 },
         { type: ServiceType.DIAGNOSIS,           base: 15 },
       ];
       for (const p of pricing) {
         await tx.pricingRule.create({
           data: {
-            tenantId: lkshop.id,
-            serviceType: p.type,
-            basePrice: p.base,
-            perKmSurcharge: 0.5,
-            nightSurcharge: 10,
-            weekendSurcharge: 5,
-            isActive: true,
+            tenantId: lkshop.id, serviceType: p.type, basePrice: p.base,
+            perKmSurcharge: 0.5, nightSurcharge: 10, weekendSurcharge: 5, isActive: true,
           },
         });
       }

@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 type PricingRule = { serviceType: string; basePrice: number };
 type Tenant = {
@@ -19,9 +20,13 @@ const SERVICE_LABELS: Record<string, string> = {
   DIAGNOSIS:           "Διάγνωση / Έλεγχος",
 };
 
-type Step = "idle" | "locating" | "form" | "submitting" | "done";
+const CURRENT_YEAR = new Date().getFullYear();
+const YEAR_OPTIONS = Array.from({ length: 35 }, (_, i) => CURRENT_YEAR - i);
+
+type Step = "idle" | "locating" | "form" | "submitting";
 
 export default function CustomerSOS({ tenant }: { tenant: Tenant }) {
+  const router = useRouter();
   const [step, setStep] = useState<Step>("idle");
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [service, setService] = useState(
@@ -29,8 +34,10 @@ export default function CustomerSOS({ tenant }: { tenant: Tenant }) {
   );
   const [phone, setPhone] = useState("");
   const [plate, setPlate] = useState("");
+  const [make, setMake] = useState("");
+  const [model, setModel] = useState("");
+  const [year, setYear] = useState<string>(String(CURRENT_YEAR));
   const [symptoms, setSymptoms] = useState("");
-  const [requestId, setRequestId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const locate = () => {
@@ -54,7 +61,7 @@ export default function CustomerSOS({ tenant }: { tenant: Tenant }) {
   };
 
   const submit = async () => {
-    if (!location || !phone.trim() || !plate.trim()) return;
+    if (!location || !phone.trim() || !plate.trim() || !make.trim() || !model.trim()) return;
     setStep("submitting");
     setError(null);
     try {
@@ -68,13 +75,16 @@ export default function CustomerSOS({ tenant }: { tenant: Tenant }) {
           longitude: location.lng,
           phone: phone.trim(),
           plate: plate.trim(),
+          make: make.trim(),
+          model: model.trim(),
+          year: parseInt(year, 10),
           symptoms: symptoms.trim() ? [symptoms.trim()] : [],
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Σφάλμα");
-      setRequestId(data.id);
-      setStep("done");
+      // Redirect to live tracking page
+      router.push(`/t/${tenant.slug}/track/${data.id}`);
     } catch (e: any) {
       setError(e.message);
       setStep("form");
@@ -82,6 +92,7 @@ export default function CustomerSOS({ tenant }: { tenant: Tenant }) {
   };
 
   const selectedPrice = tenant.pricingRules.find((p) => p.serviceType === service)?.basePrice;
+  const canSubmit = !!(phone.trim() && plate.trim() && make.trim() && model.trim());
 
   return (
     <main className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-4">
@@ -177,27 +188,71 @@ export default function CustomerSOS({ tenant }: { tenant: Tenant }) {
               )}
             </div>
 
-            <div>
-              <label className="text-xs text-slate-400 block mb-1.5">Τηλέφωνό σας *</label>
-              <input
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="69XXXXXXXX"
-                className="w-full bg-slate-800 border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-purple-500 transition"
-                inputMode="tel"
-              />
+            {/* Vehicle Info */}
+            <div className="border-t border-white/5 pt-4">
+              <div className="text-xs text-slate-400 uppercase tracking-widest mb-3">Στοιχεία Οχήματος</div>
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <div>
+                  <label className="text-xs text-slate-400 block mb-1.5">Μάρκα *</label>
+                  <input
+                    type="text"
+                    value={make}
+                    onChange={(e) => setMake(e.target.value)}
+                    placeholder="π.χ. Toyota"
+                    className="w-full bg-slate-800 border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-purple-500 transition"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 block mb-1.5">Μοντέλο *</label>
+                  <input
+                    type="text"
+                    value={model}
+                    onChange={(e) => setModel(e.target.value)}
+                    placeholder="π.χ. Yaris"
+                    className="w-full bg-slate-800 border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-purple-500 transition"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-slate-400 block mb-1.5">Έτος</label>
+                  <select
+                    value={year}
+                    onChange={(e) => setYear(e.target.value)}
+                    className="w-full bg-slate-800 border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-purple-500 transition"
+                  >
+                    {YEAR_OPTIONS.map((y) => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 block mb-1.5">Πινακίδα *</label>
+                  <input
+                    type="text"
+                    value={plate}
+                    onChange={(e) => setPlate(e.target.value.toUpperCase())}
+                    placeholder="ΑΑΑ-0000"
+                    className="w-full bg-slate-800 border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-purple-500 transition uppercase tracking-widest"
+                  />
+                </div>
+              </div>
             </div>
 
-            <div>
-              <label className="text-xs text-slate-400 block mb-1.5">Πινακίδα Οχήματος *</label>
-              <input
-                type="text"
-                value={plate}
-                onChange={(e) => setPlate(e.target.value.toUpperCase())}
-                placeholder="ΑΑΑ-0000"
-                className="w-full bg-slate-800 border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-purple-500 transition uppercase tracking-widest"
-              />
+            {/* Contact */}
+            <div className="border-t border-white/5 pt-4">
+              <div className="text-xs text-slate-400 uppercase tracking-widest mb-3">Επικοινωνία</div>
+              <div>
+                <label className="text-xs text-slate-400 block mb-1.5">Τηλέφωνό σας *</label>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="69XXXXXXXX"
+                  className="w-full bg-slate-800 border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-purple-500 transition"
+                  inputMode="tel"
+                />
+              </div>
             </div>
 
             <div>
@@ -205,7 +260,7 @@ export default function CustomerSOS({ tenant }: { tenant: Tenant }) {
               <textarea
                 value={symptoms}
                 onChange={(e) => setSymptoms(e.target.value)}
-                placeholder="π.χ. Δεν παίρνει μπρος, ελαστικό άδειο..."
+                placeholder="π.χ. Δεν παίρνει μπρος..."
                 rows={2}
                 className="w-full bg-slate-800 border border-white/10 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:border-purple-500 transition"
               />
@@ -213,7 +268,7 @@ export default function CustomerSOS({ tenant }: { tenant: Tenant }) {
 
             <button
               onClick={submit}
-              disabled={!phone.trim() || !plate.trim()}
+              disabled={!canSubmit}
               className="w-full bg-purple-600 hover:bg-purple-500 active:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl transition"
             >
               Αποστολή Αιτήματος →
@@ -224,43 +279,8 @@ export default function CustomerSOS({ tenant }: { tenant: Tenant }) {
         {/* SUBMITTING */}
         {step === "submitting" && (
           <div className="text-center py-12">
-            <div className="text-5xl mb-4">⚙️</div>
+            <div className="text-5xl mb-4 animate-spin">⚙️</div>
             <p className="text-slate-300">Αναζήτηση διαθέσιμου τεχνικού...</p>
-          </div>
-        )}
-
-        {/* DONE */}
-        {step === "done" && requestId && (
-          <div className="bg-green-500/10 border border-green-500/30 rounded-2xl p-6 text-center">
-            <div className="text-5xl mb-3">✅</div>
-            <h2 className="text-xl font-bold text-green-300 mb-2">Αίτημα Στάλθηκε!</h2>
-            <p className="text-slate-300 text-sm mb-1">Ένας τεχνικός πλησιάζει σύντομα.</p>
-            <p className="text-slate-400 text-xs mb-5">
-              Κωδικός:{" "}
-              <span className="font-mono text-purple-300 tracking-widest">
-                #{requestId.slice(-8).toUpperCase()}
-              </span>
-            </p>
-            {tenant.phone && (
-              <a
-                href={`tel:${tenant.phone}`}
-                className="block w-full bg-green-600 hover:bg-green-500 text-white px-6 py-3.5 rounded-xl text-sm font-semibold transition mb-3"
-              >
-                📞 Κλήση {tenant.name}
-              </a>
-            )}
-            <button
-              onClick={() => {
-                setStep("idle");
-                setPhone("");
-                setPlate("");
-                setSymptoms("");
-                setRequestId(null);
-              }}
-              className="text-slate-500 hover:text-slate-300 text-sm transition"
-            >
-              Νέο αίτημα
-            </button>
           </div>
         )}
 
