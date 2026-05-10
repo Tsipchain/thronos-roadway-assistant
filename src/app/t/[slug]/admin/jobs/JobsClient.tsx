@@ -30,6 +30,16 @@ const SERVICE_LABELS: Record<string, string> = {
   DIAGNOSIS:           "Διάγνωση",
 };
 
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 interface Job {
   id: string;
   status: string;
@@ -54,6 +64,8 @@ interface Tech {
   isOnline: boolean;
   totalJobs: number;
   rating: number;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 interface Props {
@@ -66,15 +78,15 @@ type Filter = "PENDING" | "ACTIVE" | "COMPLETED" | "ALL";
 
 export default function JobsClient({ slug, jobs: initialJobs, techs }: Props) {
   const router = useRouter();
-  const [jobs, setJobs]           = useState<Job[]>(initialJobs);
-  const [filter, setFilter]       = useState<Filter>("PENDING");
+  const [jobs, setJobs]            = useState<Job[]>(initialJobs);
+  const [filter, setFilter]        = useState<Filter>("PENDING");
   const [dispatchJob, setDispatch] = useState<Job | null>(null);
-  const [selectedTech, setTech]   = useState("");
-  const [eta, setEta]             = useState(30);
-  const [dispatching, setWorking] = useState(false);
-  const [dispatchErr, setErr]     = useState<string | null>(null);
+  const [selectedTech, setTech]    = useState("");
+  const [eta, setEta]              = useState(30);
+  const [dispatching, setWorking]  = useState(false);
+  const [dispatchErr, setErr]      = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState(new Date());
-  const etaInput = useRef<HTMLInputElement>(null);
+  const etaInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -100,10 +112,38 @@ export default function JobsClient({ slug, jobs: initialJobs, techs }: Props) {
   });
 
   const openDispatch = (job: Job) => {
+    // Pre-select closest online tech
+    let bestTechId = "";
+    let bestDist = Infinity;
+    for (const t of techs) {
+      if (!t.isOnline) continue;
+      if (t.latitude != null && t.longitude != null) {
+        const d = haversineKm(t.latitude, t.longitude, job.latitude, job.longitude);
+        if (d < bestDist) { bestDist = d; bestTechId = t.userId; }
+      } else if (!bestTechId) {
+        bestTechId = t.userId;
+      }
+    }
+    if (!bestTechId) bestTechId = techs[0]?.userId ?? "";
+
+    // Auto-ETA based on closest tech distance
+    const autoEta = bestDist < Infinity
+      ? Math.max(10, Math.round(bestDist * 3 / 5) * 5)
+      : 30;
+
     setDispatch(job);
-    setTech(techs.find((t) => t.isOnline)?.userId ?? "");
-    setEta(30);
+    setTech(bestTechId);
+    setEta(autoEta);
     setErr(null);
+  };
+
+  const onTechSelect = (techId: string, job: Job) => {
+    setTech(techId);
+    const t = techs.find((x) => x.userId === techId);
+    if (t?.latitude != null && t?.longitude != null) {
+      const d = haversineKm(t.latitude, t.longitude, job.latitude, job.longitude);
+      setEta(Math.max(10, Math.round(d * 3 / 5) * 5));
+    }
   };
 
   const submitDispatch = async () => {
@@ -153,7 +193,6 @@ export default function JobsClient({ slug, jobs: initialJobs, techs }: Props) {
         <button
           onClick={() => { router.refresh(); setLastRefresh(new Date()); }}
           className="ml-auto px-3 py-2 rounded-xl text-sm bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10 transition"
-          title="Ανανέωση"
         >
           ↻
         </button>
@@ -191,13 +230,16 @@ export default function JobsClient({ slug, jobs: initialJobs, techs }: Props) {
                 </span>
               </div>
 
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-300 mb-3">
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-300 mb-2">
                 <span>🚗 {job.vehicle.make} {job.vehicle.model} · <span className="font-mono">{job.vehicle.licensePlate}</span></span>
                 <span>🔧 {SERVICE_LABELS[job.serviceType] ?? job.serviceType}</span>
                 {job.technician && <span className="text-purple-300">👤 {job.technician.name}</span>}
                 {job.estimatedMinutes != null && <span className="text-cyan-300">⏱ {job.estimatedMinutes} λεπτ. ETA</span>}
-                {job.estimatedPrice != null && <span className="text-green-300">💰 {job.estimatedPrice}€</span>}
               </div>
+
+              {job.address && (
+                <div className="text-xs text-slate-400 mb-3">📍 {job.address}</div>
+              )}
 
               <div className="flex items-center justify-between gap-3">
                 <div className="flex gap-2 flex-wrap">
@@ -249,10 +291,13 @@ export default function JobsClient({ slug, jobs: initialJobs, techs }: Props) {
             {/* Customer location */}
             <div className="bg-slate-800 border border-white/10 rounded-xl p-4 mb-5">
               <div className="text-xs text-slate-500 uppercase tracking-wider mb-2">Τοποθεσία Πελάτη</div>
-              <div className="text-sm text-slate-200 mb-1">
-                {dispatchJob.address ?? `${dispatchJob.latitude.toFixed(5)}, ${dispatchJob.longitude.toFixed(5)}`}
+              {dispatchJob.address && (
+                <div className="text-sm text-slate-200 mb-2 font-medium">📍 {dispatchJob.address}</div>
+              )}
+              <div className="text-xs text-slate-500 mb-2">
+                GPS: {dispatchJob.latitude.toFixed(5)}, {dispatchJob.longitude.toFixed(5)}
               </div>
-              <div className="flex gap-3 mt-2">
+              <div className="flex gap-3">
                 <a
                   href={`https://maps.google.com/?q=${dispatchJob.latitude},${dispatchJob.longitude}`}
                   target="_blank"
@@ -271,7 +316,7 @@ export default function JobsClient({ slug, jobs: initialJobs, techs }: Props) {
                 </a>
               </div>
               <div className="mt-3 pt-3 border-t border-white/10 text-xs text-slate-400">
-                Πελάτης: <a href={`tel:${dispatchJob.customer.phone}`} className="text-blue-400 hover:text-blue-300">{dispatchJob.customer.phone}</a>
+                Τηλ. πελάτη: <a href={`tel:${dispatchJob.customer.phone}`} className="text-blue-400 hover:text-blue-300">{dispatchJob.customer.phone}</a>
               </div>
             </div>
 
@@ -279,37 +324,46 @@ export default function JobsClient({ slug, jobs: initialJobs, techs }: Props) {
             <div className="mb-5">
               <div className="text-xs text-slate-500 uppercase tracking-wider mb-2">Επιλογή Τεχνικού</div>
               <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
-                {techs.map((t) => (
-                  <label
-                    key={t.userId}
-                    className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition ${
-                      selectedTech === t.userId
-                        ? "bg-purple-600/20 border-purple-500/40"
-                        : "bg-white/5 border-white/10 hover:bg-white/10"
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="tech"
-                      value={t.userId}
-                      checked={selectedTech === t.userId}
-                      onChange={() => setTech(t.userId)}
-                      className="sr-only"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium">{t.name}</div>
-                      <div className="text-xs text-slate-400">{t.phone}</div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-xs text-slate-500">{t.totalJobs} jobs</span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${
-                        t.isOnline ? "bg-green-500/20 text-green-300" : "bg-slate-700 text-slate-500"
-                      }`}>
-                        {t.isOnline ? "Online" : "Offline"}
-                      </span>
-                    </div>
-                  </label>
-                ))}
+                {techs.map((t) => {
+                  const dist =
+                    t.latitude != null && t.longitude != null
+                      ? haversineKm(t.latitude, t.longitude, dispatchJob.latitude, dispatchJob.longitude)
+                      : null;
+                  return (
+                    <label
+                      key={t.userId}
+                      className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition ${
+                        selectedTech === t.userId
+                          ? "bg-purple-600/20 border-purple-500/40"
+                          : "bg-white/5 border-white/10 hover:bg-white/10"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="tech"
+                        value={t.userId}
+                        checked={selectedTech === t.userId}
+                        onChange={() => onTechSelect(t.userId, dispatchJob)}
+                        className="sr-only"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium">{t.name}</div>
+                        <div className="text-xs text-slate-400">{t.phone}</div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {dist != null && (
+                          <span className="text-xs text-slate-400 font-mono">{dist.toFixed(1)} km</span>
+                        )}
+                        <span className="text-xs text-slate-500">{t.totalJobs} jobs</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                          t.isOnline ? "bg-green-500/20 text-green-300" : "bg-slate-700 text-slate-500"
+                        }`}>
+                          {t.isOnline ? "Online" : "Offline"}
+                        </span>
+                      </div>
+                    </label>
+                  );
+                })}
               </div>
             </div>
 
@@ -326,7 +380,7 @@ export default function JobsClient({ slug, jobs: initialJobs, techs }: Props) {
                 />
                 <div className="flex items-center gap-2">
                   <input
-                    ref={etaInput}
+                    ref={etaInputRef}
                     type="number"
                     min={5} max={180}
                     value={eta}

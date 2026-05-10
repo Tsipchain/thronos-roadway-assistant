@@ -13,6 +13,7 @@ export async function POST(req: NextRequest) {
       make: vehicleMake,
       model: vehicleModel,
       year: vehicleYear,
+      address,
       tenantId,
       // Authenticated flow
       customerId: existingCustomerId,
@@ -74,7 +75,6 @@ export async function POST(req: NextRequest) {
           },
         });
       } else if (vehicleMake && vehicleModel) {
-        // Update vehicle info if provided and was previously unknown
         if (vehicle.make === "Άγνωστο" || vehicle.model === "Άγνωστο") {
           vehicle = await prisma.vehicle.update({
             where: { id: vehicle.id },
@@ -102,9 +102,10 @@ export async function POST(req: NextRequest) {
         vehicleId,
         tenantId: tenantId ?? null,
         serviceType: serviceType as ServiceType,
-        latitude: parseFloat(latitude),
+        latitude:  parseFloat(latitude),
         longitude: parseFloat(longitude),
-        symptoms: Array.isArray(symptoms) ? symptoms : [symptoms].filter(Boolean),
+        address:   typeof address === "string" && address.trim() ? address.trim() : null,
+        symptoms:  Array.isArray(symptoms) ? symptoms : [symptoms].filter(Boolean),
         description: description ?? null,
         status: "PENDING",
       },
@@ -125,17 +126,17 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const tenantId = searchParams.get("tenantId");
-  const status = searchParams.get("status");
+  const status   = searchParams.get("status");
 
   const where: Record<string, unknown> = {};
   if (tenantId) where.tenantId = tenantId;
-  if (status) where.status = status;
+  if (status)   where.status   = status;
 
   const requests = await prisma.serviceRequest.findMany({
     where,
     include: {
-      customer: { select: { name: true, phone: true } },
-      vehicle: true,
+      customer:   { select: { name: true, phone: true } },
+      vehicle:    true,
       technician: { select: { name: true, phone: true } },
     },
     orderBy: { createdAt: "desc" },

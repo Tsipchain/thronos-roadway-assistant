@@ -32,13 +32,14 @@ export default function CustomerSOS({ tenant }: { tenant: Tenant }) {
   const [service, setService] = useState(
     tenant.pricingRules[0]?.serviceType ?? "BATTERY_REPLACEMENT"
   );
-  const [phone, setPhone] = useState("");
-  const [plate, setPlate] = useState("");
-  const [make, setMake] = useState("");
-  const [model, setModel] = useState("");
-  const [year, setYear] = useState<string>(String(CURRENT_YEAR));
+  const [address, setAddress]   = useState("");
+  const [phone, setPhone]       = useState("");
+  const [plate, setPlate]       = useState("");
+  const [make, setMake]         = useState("");
+  const [model, setModel]       = useState("");
+  const [year, setYear]         = useState<string>(String(CURRENT_YEAR));
   const [symptoms, setSymptoms] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError]       = useState<string | null>(null);
 
   const locate = () => {
     if (!navigator.geolocation) {
@@ -61,7 +62,7 @@ export default function CustomerSOS({ tenant }: { tenant: Tenant }) {
   };
 
   const submit = async () => {
-    if (!location || !phone.trim() || !plate.trim() || !make.trim() || !model.trim()) return;
+    if (!location || !phone.trim() || !plate.trim() || !make.trim() || !model.trim() || !address.trim()) return;
     setStep("submitting");
     setError(null);
     try {
@@ -69,21 +70,21 @@ export default function CustomerSOS({ tenant }: { tenant: Tenant }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          tenantId: tenant.id,
+          tenantId:    tenant.id,
           serviceType: service,
-          latitude: location.lat,
-          longitude: location.lng,
-          phone: phone.trim(),
-          plate: plate.trim(),
-          make: make.trim(),
-          model: model.trim(),
-          year: parseInt(year, 10),
-          symptoms: symptoms.trim() ? [symptoms.trim()] : [],
+          latitude:    location.lat,
+          longitude:   location.lng,
+          address:     address.trim(),
+          phone:       phone.trim(),
+          plate:       plate.trim(),
+          make:        make.trim(),
+          model:       model.trim(),
+          year:        parseInt(year, 10),
+          symptoms:    symptoms.trim() ? [symptoms.trim()] : [],
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Σφάλμα");
-      // Redirect to live tracking page
       router.push(`/t/${tenant.slug}/track/${data.id}`);
     } catch (e: any) {
       setError(e.message);
@@ -92,7 +93,7 @@ export default function CustomerSOS({ tenant }: { tenant: Tenant }) {
   };
 
   const selectedPrice = tenant.pricingRules.find((p) => p.serviceType === service)?.basePrice;
-  const canSubmit = !!(phone.trim() && plate.trim() && make.trim() && model.trim());
+  const canSubmit = !!(phone.trim() && plate.trim() && make.trim() && model.trim() && address.trim());
 
   return (
     <main className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-4">
@@ -127,7 +128,7 @@ export default function CustomerSOS({ tenant }: { tenant: Tenant }) {
           </div>
         )}
 
-        {/* IDLE — show prices + SOS button */}
+        {/* IDLE */}
         {step === "idle" && (
           <>
             {tenant.pricingRules.length > 0 && (
@@ -165,12 +166,41 @@ export default function CustomerSOS({ tenant }: { tenant: Tenant }) {
         {/* FORM */}
         {step === "form" && location && (
           <div className="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-4">
+
+            {/* GPS confirmation */}
             <div className="flex items-center gap-2 text-green-400 text-sm">
               <span className="text-lg">✅</span>
-              <span>Τοποθεσία εντοπίστηκε</span>
+              <div>
+                <span>Τοποθεσία GPS εντοπίστηκε</span>
+                <a
+                  href={`https://maps.google.com/?q=${location.lat},${location.lng}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block text-xs text-blue-400 hover:text-blue-300 mt-0.5"
+                >
+                  Δείτε στο χάρτη ↗
+                </a>
+              </div>
             </div>
 
+            {/* Address confirmation — required */}
             <div>
+              <label className="text-xs text-slate-400 block mb-1.5">
+                Διεύθυνσή σας *
+                <span className="text-slate-600 font-normal ml-1">(βοηθά τον τεχνικό να σας βρει)</span>
+              </label>
+              <input
+                type="text"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder="π.χ. Λεωφόρος Νίκης 25, Θεσσαλονίκη"
+                className="w-full bg-slate-800 border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-purple-500 transition"
+                autoComplete="street-address"
+              />
+            </div>
+
+            {/* Service type */}
+            <div className="border-t border-white/5 pt-4">
               <label className="text-xs text-slate-400 block mb-1.5">Τύπος Βοήθειας</label>
               <select
                 value={service}
@@ -188,7 +218,7 @@ export default function CustomerSOS({ tenant }: { tenant: Tenant }) {
               )}
             </div>
 
-            {/* Vehicle Info */}
+            {/* Vehicle */}
             <div className="border-t border-white/5 pt-4">
               <div className="text-xs text-slate-400 uppercase tracking-widest mb-3">Στοιχεία Οχήματος</div>
               <div className="grid grid-cols-2 gap-3 mb-3">
@@ -241,18 +271,15 @@ export default function CustomerSOS({ tenant }: { tenant: Tenant }) {
 
             {/* Contact */}
             <div className="border-t border-white/5 pt-4">
-              <div className="text-xs text-slate-400 uppercase tracking-widest mb-3">Επικοινωνία</div>
-              <div>
-                <label className="text-xs text-slate-400 block mb-1.5">Τηλέφωνό σας *</label>
-                <input
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="69XXXXXXXX"
-                  className="w-full bg-slate-800 border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-purple-500 transition"
-                  inputMode="tel"
-                />
-              </div>
+              <label className="text-xs text-slate-400 block mb-1.5">Τηλέφωνό σας *</label>
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="69XXXXXXXX"
+                className="w-full bg-slate-800 border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-purple-500 transition"
+                inputMode="tel"
+              />
             </div>
 
             <div>
@@ -284,11 +311,9 @@ export default function CustomerSOS({ tenant }: { tenant: Tenant }) {
           </div>
         )}
 
-        {/* Footer */}
         <div className="text-center mt-8">
           <p className="text-slate-700 text-xs">
-            Powered by{" "}
-            <span className="text-purple-600">Thronos Chain</span>
+            Powered by <span className="text-purple-600">Thronos Chain</span>
           </p>
         </div>
       </div>

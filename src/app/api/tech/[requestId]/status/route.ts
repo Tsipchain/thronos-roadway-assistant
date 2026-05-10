@@ -6,9 +6,9 @@ import { prisma } from "@/lib/prisma";
 const VALID_TRANSITIONS: Record<string, string[]> = {
   PENDING:     ["ACCEPTED", "CANCELLED"],
   ACCEPTED:    ["EN_ROUTE", "CANCELLED"],
-  EN_ROUTE:    ["ARRIVED", "CANCELLED"],
+  EN_ROUTE:    ["ARRIVED",  "CANCELLED"],
   ARRIVED:     ["IN_PROGRESS", "CANCELLED"],
-  IN_PROGRESS: ["COMPLETED", "CANCELLED"],
+  IN_PROGRESS: ["COMPLETED",   "CANCELLED"],
 };
 
 export async function PATCH(
@@ -22,7 +22,7 @@ export async function PATCH(
   }
 
   const body = await req.json();
-  const { status } = body;
+  const { status, estimatedMinutes } = body;
 
   const request = await prisma.serviceRequest.findUnique({
     where: { id: params.requestId },
@@ -37,19 +37,26 @@ export async function PATCH(
     );
   }
 
-  const timestampData: Record<string, Date> = {};
-  if (status === "ACCEPTED")    timestampData.acceptedAt   = new Date();
-  if (status === "ARRIVED")     timestampData.arrivedAt    = new Date();
-  if (status === "COMPLETED")   timestampData.completedAt  = new Date();
-  if (status === "CANCELLED")   timestampData.cancelledAt  = new Date();
+  const updateData: Record<string, unknown> = {
+    status,
+    technicianId: request.technicianId ?? session.user.id,
+  };
+
+  if (status === "ACCEPTED")    updateData.acceptedAt   = new Date();
+  if (status === "ARRIVED")     updateData.arrivedAt    = new Date();
+  if (status === "COMPLETED")   updateData.completedAt  = new Date();
+  if (status === "CANCELLED")   updateData.cancelledAt  = new Date();
+
+  // When tech goes EN_ROUTE they can update ETA — reset acceptedAt so customer
+  // countdown becomes accurate from the moment the tech actually departed
+  if (status === "EN_ROUTE" && typeof estimatedMinutes === "number" && estimatedMinutes >= 1) {
+    updateData.estimatedMinutes = Math.max(1, Math.min(180, estimatedMinutes));
+    updateData.acceptedAt = new Date();
+  }
 
   const updated = await prisma.serviceRequest.update({
     where: { id: params.requestId },
-    data: {
-      status: status as any,
-      technicianId: request.technicianId ?? session.user.id,
-      ...timestampData,
-    },
+    data: updateData as any,
   });
 
   if (status === "COMPLETED") {
@@ -59,5 +66,5 @@ export async function PATCH(
     });
   }
 
-  return NextResponse.json({ ok: true, status: updated.status });
+  return NextResponse.json({ ok: true, status: updated.status, estimatedMinutes: updated.estimatedMinutes });
 }
