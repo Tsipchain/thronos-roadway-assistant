@@ -43,15 +43,15 @@ const NEXT_STATUS: Record<string, string | null> = {
 
 const NEXT_LABEL: Record<string, string> = {
   PENDING:     "✓ Δέχομαι",
-  EN_ROUTE:    "\u{1F4CD} Έφτασα",
-  ARRIVED:     "\u{1F527} Ξεκινώ",
+  EN_ROUTE:    "📍 Έφτασα",
+  ARRIVED:     "🔧 Ξεκινώ",
   IN_PROGRESS: "✅ Ολοκλήρωσα",
 };
 
 const BATTERY_TIERS = [
-  { ah: 45, label: "45Ah", sublabel: "Τυπική",        surcharge: 0  },
-  { ah: 55, label: "55Ah", sublabel: "Ενισχυμένη",  surcharge: 10 },
-  { ah: 65, label: "65Ah", sublabel: "Premium",         surcharge: 20 },
+  { ah: 45, label: "45Ah", sublabel: "Τυπική",      surcharge: 0  },
+  { ah: 55, label: "55Ah", sublabel: "Ενισχυμένη", surcharge: 10 },
+  { ah: 65, label: "65Ah", sublabel: "Premium",      surcharge: 20 },
 ];
 
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -122,7 +122,7 @@ export default function TechDashboard({
   const [myLoc, setMyLoc]             = useState<{ lat: number; lng: number } | null>(null);
   const prevCountRef                  = useRef(activeJobs.length);
 
-  const [etaConfirm, setEtaConfirm]         = useState<EtaConfirm | null>(null);
+  const [etaConfirm, setEtaConfirm]           = useState<EtaConfirm | null>(null);
   const [completeConfirm, setCompleteConfirm] = useState<CompleteConfirm | null>(null);
 
   useEffect(() => {
@@ -231,7 +231,7 @@ export default function TechDashboard({
 
         {newJobAlert && (
           <div className="mb-4 bg-purple-500/20 border border-purple-500/40 rounded-2xl p-4 flex items-center gap-3 animate-pulse">
-            <span className="text-2xl">\u{1F514}</span>
+            <span className="text-2xl">🔔</span>
             <div>
               <div className="font-semibold text-purple-300">Νέο Job ανατέθηκε!</div>
               <div className="text-xs text-slate-400">Ελέγξτε τα Ανατεθειμένα παρακάτω</div>
@@ -242,7 +242,7 @@ export default function TechDashboard({
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-amber-600 flex items-center justify-center text-lg font-bold shadow-lg shadow-amber-900/30">\u{1F527}</div>
+            <div className="w-11 h-11 rounded-xl bg-amber-600 flex items-center justify-center text-lg font-bold shadow-lg shadow-amber-900/30">🔧</div>
             <div>
               <h1 className="font-bold text-base">{userName}</h1>
               <p className="text-slate-500 text-xs">
@@ -266,8 +266,8 @@ export default function TechDashboard({
 
         <div className="grid grid-cols-3 gap-3 mb-6">
           {[
-            { label: "Ενεργά",   value: jobs.length,                             color: "text-amber-400" },
-            { label: "Σύνολο",   value: completedTotal,                           color: "text-blue-400"  },
+            { label: "Ενεργά",   value: jobs.length,                            color: "text-amber-400" },
+            { label: "Σύνολο",   value: completedTotal,                          color: "text-blue-400"  },
             { label: "Rating ⭐", value: techProfile?.rating.toFixed(1) ?? "—", color: "text-yellow-400" },
           ].map((s) => (
             <div key={s.label} className="bg-white/5 border border-white/10 rounded-2xl p-4 text-center">
@@ -288,7 +288,7 @@ export default function TechDashboard({
           </h2>
           {jobs.length === 0 ? (
             <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center text-slate-500">
-              <div className="text-3xl mb-2">\u{1F634}</div>
+              <div className="text-3xl mb-2">😴</div>
               <p className="text-sm">Δεν υπάρχουν ενεργά jobs</p>
             </div>
           ) : (
@@ -301,7 +301,7 @@ export default function TechDashboard({
                       <div>
                         <div className="font-semibold">{job.customer.name}</div>
                         <a href={`tel:${job.customer.phone}`} className="text-sm text-blue-400 hover:text-blue-300">
-                          \u{1F4DE} {job.customer.phone}
+                          📞 {job.customer.phone}
                         </a>
                       </div>
                       <span className={`text-xs px-2.5 py-1 rounded-full shrink-0 font-medium ${
@@ -312,26 +312,26 @@ export default function TechDashboard({
                     </div>
 
                     <div className="space-y-1 text-sm text-slate-300 mb-3">
-                      <div>\u{1F697} {job.vehicle.make} {job.vehicle.model} · <span className="font-mono">{job.vehicle.licensePlate}</span></div>
-                      <div>\u{1F527} {SERVICE_LABELS[job.serviceType] ?? job.serviceType}</div>
-                      {job.address && <div>\u{1F4CD} {job.address}</div>}
+                      <div>🚗 {job.vehicle.make} {job.vehicle.model} · <span className="font-mono">{job.vehicle.licensePlate}</span></div>
+                      <div>🔧 {SERVICE_LABELS[job.serviceType] ?? job.serviceType}</div>
+                      {job.address && <div>📍 {job.address}</div>}
                       {job.status === "ACCEPTED" && (
                         <div className="flex items-center gap-3">
                           {job.estimatedMinutes != null && <span className="text-cyan-300">⏱ ETA admin: {job.estimatedMinutes} λεπτ.</span>}
-                          {distKm != null && <span className="text-slate-400">\u{1F4CF} {distKm.toFixed(1)} km</span>}
+                          {distKm != null && <span className="text-slate-400">📏 {distKm.toFixed(1)} km</span>}
                         </div>
                       )}
-                      {job.estimatedPrice != null && <div className="text-purple-300 font-medium">\u{1F4B0} {job.estimatedPrice}€</div>}
+                      {job.estimatedPrice != null && <div className="text-purple-300 font-medium">💰 {job.estimatedPrice}€</div>}
                     </div>
 
                     <div className="flex gap-2">
                       <a href={`https://maps.google.com/?q=${job.latitude},${job.longitude}`} target="_blank" rel="noopener noreferrer"
                         className="flex-1 bg-blue-700/30 hover:bg-blue-700/50 text-blue-300 text-sm font-medium py-2.5 rounded-xl transition text-center">
-                        \u{1F5FA}️ Maps
+                        🗺️ Maps
                       </a>
                       <a href={`https://waze.com/ul?ll=${job.latitude},${job.longitude}&navigate=yes`} target="_blank" rel="noopener noreferrer"
                         className="flex-1 bg-cyan-700/30 hover:bg-cyan-700/50 text-cyan-300 text-sm font-medium py-2.5 rounded-xl transition text-center">
-                        \u{1F697} Waze
+                        🚗 Waze
                       </a>
                       {NEXT_STATUS[job.status] && (
                         <button
@@ -339,7 +339,7 @@ export default function TechDashboard({
                           disabled={updatingId === job.id}
                           className="flex-1 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-sm font-semibold py-2.5 rounded-xl transition"
                         >
-                          {updatingId === job.id ? "..." : job.status === "ACCEPTED" ? "\u{1F697} Εκκινώ" : (NEXT_LABEL[job.status] ?? "Επόμενο")}
+                          {updatingId === job.id ? "..." : job.status === "ACCEPTED" ? "🚗 Εκκινώ" : (NEXT_LABEL[job.status] ?? "Επόμενο")}
                         </button>
                       )}
                     </div>
@@ -407,7 +407,7 @@ export default function TechDashboard({
                 <button onClick={() => { updateStatus(job.id, "EN_ROUTE", { estimatedMinutes: eta }); setEtaConfirm(null); }}
                   disabled={updatingId === job.id}
                   className="flex-1 py-3 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-semibold transition text-sm">
-                  \u{1F697} Εκκινώ →
+                  🚗 Εκκινώ →
                 </button>
               </div>
             </div>
@@ -475,7 +475,7 @@ export default function TechDashboard({
                           : "bg-white/5 border-white/10 text-slate-300 hover:bg-white/10"
                       }`}
                     >
-                      <div className="text-2xl mb-1">{m === "CASH" ? "\u{1F4B5}" : "\u{1F4B3}"}</div>
+                      <div className="text-2xl mb-1">{m === "CASH" ? "💵" : "💳"}</div>
                       <div className="text-sm font-medium">{m === "CASH" ? "Μετρητά" : "Κάρτα POS"}</div>
                     </button>
                   ))}
@@ -518,10 +518,10 @@ export default function TechDashboard({
                   disabled={!c.finalPrice || updatingId === c.job.id}
                   onClick={() => {
                     updateStatus(c.job.id, "COMPLETED", {
-                      finalPrice:     c.finalPrice,
-                      paymentMethod:  c.paymentMethod,
-                      batteryAh:      c.batteryAh,
-                      batteryBrand:   c.batteryBrand || null,
+                      finalPrice:      c.finalPrice,
+                      paymentMethod:   c.paymentMethod,
+                      batteryAh:       c.batteryAh,
+                      batteryBrand:    c.batteryBrand || null,
                       technicianNotes: c.notes || null,
                     });
                     setCompleteConfirm(null);
