@@ -1,0 +1,42 @@
+{
+  "name": "Thronos Roadway Assistant",
+  "short_name": "Roadway",
+  "description": "Πλατφόρμα αποστολής τεχνικών οδικής βοήθειας",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#7c3aed",
+  "orientation": "portrait-primary",
+  "lang": "el",
+  "categories": ["utilities", "productivity"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Dashboard Τεχνικού",
+      "short_name": "Dashboard",
+      "description": "Άνοιγμα dashboard τεχνικού",
+      "url": "/login",
+      "icons": [{ "src": "/icon.svg", "sizes": "any" }]
+    }
+  ]
+}
