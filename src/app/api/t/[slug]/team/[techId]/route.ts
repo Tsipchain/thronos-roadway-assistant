@@ -13,7 +13,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json();
-  const { name, phone, email } = body;
+  const { name, phone, email, serviceAreaId } = body;
 
   const tech = await prisma.technicianProfile.findFirst({
     where: { id: params.techId, tenant: { slug: params.slug } },
@@ -21,14 +21,22 @@ export async function PATCH(
   });
   if (!tech) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  await prisma.user.update({
-    where: { id: tech.userId },
-    data: {
-      ...(name  !== undefined && { name }),
-      ...(phone !== undefined && { phone: phone || null }),
-      ...(email !== undefined && { email }),
-    },
-  });
+  await Promise.all([
+    prisma.user.update({
+      where: { id: tech.userId },
+      data: {
+        ...(name  !== undefined && { name }),
+        ...(phone !== undefined && { phone: phone || null }),
+        ...(email !== undefined && { email }),
+      },
+    }),
+    serviceAreaId !== undefined
+      ? prisma.technicianProfile.update({
+          where: { id: params.techId },
+          data: { serviceAreaId: serviceAreaId || null },
+        })
+      : Promise.resolve(),
+  ]);
 
   return NextResponse.json({ ok: true });
 }
