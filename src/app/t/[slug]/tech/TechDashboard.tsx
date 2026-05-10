@@ -124,6 +124,8 @@ export default function TechDashboard({
 
   const [etaConfirm, setEtaConfirm]           = useState<EtaConfirm | null>(null);
   const [completeConfirm, setCompleteConfirm] = useState<CompleteConfirm | null>(null);
+  const [paymentLink, setPaymentLink]         = useState<string | null>(null);
+  const [linkCopied, setLinkCopied]           = useState(false);
 
   useEffect(() => {
     const id = setInterval(() => { router.refresh(); setLastRefresh(new Date()); }, 30_000);
@@ -172,8 +174,12 @@ export default function TechDashboard({
         body: JSON.stringify({ status: newStatus, ...extra }),
       });
       if (!res.ok) throw new Error("Σφάλμα ενημέρωσης");
+      const resData = await res.json();
       if (newStatus === "COMPLETED") {
         setJobs((prev) => prev.filter((j) => j.id !== requestId));
+        if (resData.stripeCheckoutUrl) {
+          setPaymentLink(resData.stripeCheckoutUrl);
+        }
       } else {
         setJobs((prev) => prev.map((j) =>
           j.id === requestId ? { ...j, status: newStatus } : j
@@ -535,6 +541,50 @@ export default function TechDashboard({
           </div>
         );
       })()}
+
+      {/* Payment link modal — shown after CARD completion */}
+      {paymentLink && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 border border-white/10 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+            <div className="text-center mb-5">
+              <div className="text-4xl mb-2">💳</div>
+              <h3 className="font-bold text-lg">Link Πληρωμής με Κάρτα</h3>
+              <p className="text-slate-400 text-sm mt-1">Στείλτε αυτό το link στον πελάτη για να πληρώσει</p>
+            </div>
+
+            <div className="bg-slate-800 border border-white/10 rounded-xl p-3 mb-4">
+              <p className="text-xs text-slate-400 break-all">{paymentLink}</p>
+            </div>
+
+            <div className="space-y-3">
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(paymentLink).catch(() => {});
+                  setLinkCopied(true);
+                  setTimeout(() => setLinkCopied(false), 2500);
+                }}
+                className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition"
+              >
+                {linkCopied ? "✓ Αντιγράφηκε!" : "📋 Αντιγραφή Link"}
+              </button>
+              <a
+                href={`https://wa.me/?text=${encodeURIComponent("Πληρωμή υπηρεσίας: " + paymentLink)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-3 rounded-xl bg-green-600/30 border border-green-500/40 hover:bg-green-600/40 text-green-300 font-semibold text-sm flex items-center justify-center gap-2 transition"
+              >
+                <span>📱</span> Αποστολή μέσω WhatsApp
+              </a>
+              <button
+                onClick={() => setPaymentLink(null)}
+                className="w-full py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 text-sm transition"
+              >
+                Κλείσιμο
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

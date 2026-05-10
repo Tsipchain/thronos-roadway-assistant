@@ -40,6 +40,22 @@ export async function POST(
       apiVersion: "2024-06-20" as any,
     });
 
+    // Reuse existing valid session if available
+    const existingPayment = await prisma.payment.findUnique({
+      where: { requestId: params.jobId },
+      select: { stripePaymentId: true },
+    });
+    if (existingPayment?.stripePaymentId) {
+      try {
+        const existingSession = await stripe.checkout.sessions.retrieve(existingPayment.stripePaymentId);
+        if (existingSession.status === "open" && existingSession.url) {
+          return NextResponse.json({ url: existingSession.url, type: "stripe" });
+        }
+      } catch {
+        // Session not found or invalid, create a new one
+      }
+    }
+
     const base = process.env.NEXTAUTH_URL ?? "https://roadway-assistant.thronoschain.org";
 
     const session = await stripe.checkout.sessions.create({

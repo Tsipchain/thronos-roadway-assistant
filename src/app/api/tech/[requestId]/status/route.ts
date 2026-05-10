@@ -100,24 +100,72 @@ export async function PATCH(
       });
     }
 
+    let stripeCheckoutUrl: string | null = null;
+
     // Record payment
     if (paymentMethod && finalPrice && finalPrice > 0) {
-      const method = paymentMethod === "CARD" ? "CARD" : "CASH";
-      await prisma.payment.upsert({
-        where:  { requestId: updated.id },
-        create: {
-          requestId: updated.id,
-          method:    method as any,
-          status:    "COMPLETED",
-          amount:    finalPrice,
-          currency:  "EUR",
-        },
-        update: {
-          method: method as any,
-          status: "COMPLETED",
-          amount: finalPrice,
-        },
-      });
+      if (paymentMethod === "CARD") {
+        // Card payment: create Stripe checkout session, keep payment PENDING until customer pays
+        const tenant = updated.tenantId
+          ? await prisma.partnerCompany.findUnique({
+              where: { id: updated.tenantId },
+              select: { id: true, name: true, slug: true, stripeCustomerId: true },
+            })
+          : null;
+
+        if (tenant && process.env.STRIPE_SECRET_KEY) {
+          try {
+            const Stripe = (await import("stripe")).default;
+            const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2024-06-20" as any });
+            const base = process.env.NEXTAUTH_URL ?? "https://roadway-assistant.thronoschain.org";
+
+            const session = await stripe.checkout.sessions.create({
+              line_items: [{
+                price_data: {
+                  currency: "eur",
+                  product_data: { name: `Πληρωμή Εργασίας — ${tenant.name}` },
+                  unit_amount: Math.round(finalPrice * 100),
+                },
+                quantity: 1,
+              }],
+              mode: "payment",
+              payment_method_types: ["card"],
+              success_url: `${base}/t/${tenant.slug}/track/${updated.id}?paid=1`,
+              cancel_url:  `${base}/t/${tenant.slug}/track/${updated.id}`,
+              metadata: { jobId: updated.id, tenantId: tenant.id },
+              ...(tenant.stripeCustomerId ? { customer: tenant.stripeCustomerId } : {}),
+            });
+
+            stripeCheckoutUrl = session.url;
+
+            await prisma.payment.upsert({
+              where:  { requestId: updated.id },
+              create: { requestId: updated.id, method: "CARD", status: "PENDING", amount: finalPrice, currency: "EUR", stripePaymentId: session.id },
+              update: { method: "CARD", status: "PENDING", amount: finalPrice, stripePaymentId: session.id },
+            });
+          } catch (e) {
+            console.error("Stripe session creation failed:", e);
+            await prisma.payment.upsert({
+              where:  { requestId: updated.id },
+              create: { requestId: updated.id, method: "CARD", status: "PENDING", amount: finalPrice, currency: "EUR" },
+              update: { method: "CARD", status: "PENDING", amount: finalPrice },
+            });
+          }
+        } else {
+          await prisma.payment.upsert({
+            where:  { requestId: updated.id },
+            create: { requestId: updated.id, method: "CARD", status: "PENDING", amount: finalPrice, currency: "EUR" },
+            update: { method: "CARD", status: "PENDING", amount: finalPrice },
+          });
+        }
+      } else {
+        // Cash payment: mark as completed immediately
+        await prisma.payment.upsert({
+          where:  { requestId: updated.id },
+          create: { requestId: updated.id, method: "CASH", status: "COMPLETED", amount: finalPrice, currency: "EUR" },
+          update: { method: "CASH", status: "COMPLETED", amount: finalPrice },
+        });
+      }
     }
 
     // Increment technician's total jobs
@@ -132,5 +180,6 @@ export async function PATCH(
     status: updated.status,
     finalPrice: updated.finalPrice,
     estimatedMinutes: updated.estimatedMinutes,
+    stripeCheckoutUrl,
   });
 }
