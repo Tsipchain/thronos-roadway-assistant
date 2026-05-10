@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 const SERVICE_BADGES: Record<string, string> = {
   BATTERY_REPLACEMENT: "🔋",
   BATTERY_CHARGE:      "⚡",
-  TIRE_CHANGE:         "🛞",
+  TIRE_CHANGE:         "🛥",
   TIRE_REPAIR:         "🔧",
   DIAGNOSIS:           "🔍",
 };
@@ -188,10 +188,10 @@ export default async function SuperAdminPage() {
                         <div className="flex gap-2 justify-end items-center">
                           <Link
                             href={`/admin/tenants/${t.slug}`}
-                            className="text-slate-500 hover:text-slate-200 text-xs"
-                            title="Διαχείριση υπηρεσιών"
+                            className="bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs px-3 py-1.5 rounded-lg transition font-medium"
+                            title="Επεξεργασία tenant"
                           >
-                            Υπηρ.
+                            ✏️ Επεξ.
                           </Link>
                           <Link
                             href={`/t/${t.slug}`}
