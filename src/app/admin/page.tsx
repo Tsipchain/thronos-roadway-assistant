@@ -21,7 +21,7 @@ export default async function SuperAdminPage() {
     redirect("/login");
   }
 
-  const [tenants, totalJobs, activeJobs, pendingP2P, pendingInvoices] = await Promise.all([
+  const [tenants, totalJobs, activeJobs, pendingP2P, pendingInvoices, pendingPayouts] = await Promise.all([
     prisma.partnerCompany.findMany({
       include: {
         _count:       { select: { technicians: true, requests: true, users: true } },
@@ -35,6 +35,7 @@ export default async function SuperAdminPage() {
     }),
     prisma.p2POrder.count({ where: { status: "QUOTE" } }),
     prisma.tenantInvoice.count({ where: { status: { in: ["SENT", "OVERDUE"] } } }),
+    prisma.tenantPayout.count({ where: { status: "PENDING" } }),
   ]);
 
   const systemStats = [
@@ -81,7 +82,7 @@ export default async function SuperAdminPage() {
         </div>
 
         {/* Action Nav Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           <Link
             href="/admin/p2p"
             className="bg-amber-500/10 border border-amber-500/30 hover:border-amber-400/60 rounded-2xl p-5 transition group"
@@ -115,6 +116,26 @@ export default async function SuperAdminPage() {
                 {pendingInvoices > 0 && (
                   <span className="bg-blue-500 text-white text-xs font-bold px-2.5 py-1 rounded-full">
                     {pendingInvoices} ανοιχτά
+                  </span>
+                )}
+                <span className="text-slate-500 group-hover:text-slate-300 transition text-xl">→</span>
+              </div>
+            </div>
+          </Link>
+
+          <Link
+            href="/admin/payouts"
+            className="bg-green-500/10 border border-green-500/30 hover:border-green-400/60 rounded-2xl p-5 transition group"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-green-400 font-semibold text-base mb-1">Payouts Tenants</div>
+                <div className="text-slate-400 text-sm">Εκκαθάριση πληρωμών · SEPA · USDC/USDT via EtherFi</div>
+              </div>
+              <div className="flex items-center gap-2">
+                {pendingPayouts > 0 && (
+                  <span className="bg-green-500 text-black text-xs font-bold px-2.5 py-1 rounded-full">
+                    {pendingPayouts} εκκρεμή
                   </span>
                 )}
                 <span className="text-slate-500 group-hover:text-slate-300 transition text-xl">→</span>
@@ -189,7 +210,6 @@ export default async function SuperAdminPage() {
                           <Link
                             href={`/admin/tenants/${t.slug}`}
                             className="bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs px-3 py-1.5 rounded-lg transition font-medium"
-                            title="Επεξεργασία tenant"
                           >
                             ✏️ Επεξ.
                           </Link>

@@ -70,6 +70,13 @@ enum InvoiceStatus {
   CANCELLED
 }
 
+enum PayoutStatus {
+  PENDING
+  PROCESSING
+  PAID
+  OFFSET
+}
+
 model User {
   id            String          @id @default(cuid())
   email         String          @unique
@@ -295,13 +302,20 @@ model PartnerCompany {
   stripeCustomerId String?
 
   // Thronos Chain — enterprise pledge
-  thrWalletAddress  String?   @unique  // THR address from /pledge_submit
-  btcPledgeAddress  String?            // BTC source address partner registered
-  btcPledgeVerified Float     @default(0)  // BTC amount confirmed on-chain
+  thrWalletAddress  String?   @unique
+  btcPledgeAddress  String?
+  btcPledgeVerified Float     @default(0)
   pledgeVerifiedAt  DateTime?
-  pledgeHash        String?            // sha256 hash from /pledge_submit
+  pledgeHash        String?
   enterpriseEnabled Boolean   @default(false)
-  thrRewardPoolBalance Float   @default(0)
+  thrRewardPoolBalance Float  @default(0)
+
+  // Payout settings
+  payoutMethod        String  @default("BANK_TRANSFER")  // BANK_TRANSFER | USDC_ETH | USDT_ETH | SUBSCRIPTION_OFFSET
+  payoutIban          String?
+  payoutBic           String?
+  payoutWalletAddress String?  // ETH wallet for USDC/USDT settlements
+  platformFeePercent  Float   @default(8)  // overrideable per tenant
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -315,6 +329,34 @@ model PartnerCompany {
   rewardTxs    TenantRewardTx[]
   p2pOrders    P2POrder[]
   invoices     TenantInvoice[]
+  payouts      TenantPayout[]
+}
+
+model TenantPayout {
+  id       String         @id @default(cuid())
+  tenantId String
+  tenant   PartnerCompany @relation(fields: [tenantId], references: [id])
+  jobId    String?
+
+  grossAmountEur Float
+  feePercent     Float
+  feeAmountEur   Float
+  netAmountEur   Float
+
+  status PayoutStatus @default(PENDING)
+  method String       @default("BANK_TRANSFER")
+
+  stripeTransferId String?
+  cryptoTxHash     String?
+  bankRef          String?
+  paidAt           DateTime?
+  notes            String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, status])
+  @@index([createdAt])
 }
 
 model TenantTeamMember {
@@ -357,27 +399,27 @@ model TenantRewardTx {
 }
 
 model P2POrder {
-  id            String          @id @default(cuid())
-  tenantId      String?
-  tenant        PartnerCompany? @relation(fields: [tenantId], references: [id])
-  userId        String
-  user          User            @relation(fields: [userId], references: [id])
+  id       String          @id @default(cuid())
+  tenantId String?
+  tenant   PartnerCompany? @relation(fields: [tenantId], references: [id])
+  userId   String
+  user     User            @relation(fields: [userId], references: [id])
 
-  btcAmount      Float
-  eurAmount      Float
-  rateEurPerBtc  Float
-  feeEur         Float          @default(0)
+  btcAmount     Float
+  eurAmount     Float
+  rateEurPerBtc Float
+  feeEur        Float          @default(0)
   quoteExpiresAt DateTime
 
-  status         P2POrderStatus @default(QUOTE)
-  paymentRef     String?
-  paymentMethod  String         @default("bank")
-  paidAt         DateTime?
+  status        P2POrderStatus @default(QUOTE)
+  paymentRef    String?
+  paymentMethod String         @default("bank")
+  paidAt        DateTime?
 
-  destinationBtc String
-  btcTxHash      String?
-  sentAt         DateTime?
-  confirmedAt    DateTime?
+  destinationBtc  String
+  btcTxHash       String?
+  sentAt          DateTime?
+  confirmedAt     DateTime?
 
   exchangeOrderId String?
   notes           String?
@@ -389,28 +431,28 @@ model P2POrder {
 }
 
 model TenantInvoice {
-  id            String         @id @default(cuid())
-  tenantId      String
-  tenant        PartnerCompany @relation(fields: [tenantId], references: [id])
+  id       String         @id @default(cuid())
+  tenantId String
+  tenant   PartnerCompany @relation(fields: [tenantId], references: [id])
 
-  number        String         @unique
-  description   String
-  amountEur     Float
-  vatPct        Float          @default(24)
-  totalEur      Float
+  number      String        @unique
+  description String
+  amountEur   Float
+  vatPct      Float         @default(24)
+  totalEur    Float
 
-  status        InvoiceStatus  @default(DRAFT)
-  dueDate       DateTime
-  paidAt        DateTime?
+  status          InvoiceStatus @default(DRAFT)
+  dueDate         DateTime
+  paidAt          DateTime?
   stripePaymentId String?
-  paymentMethod String?
-  bankRef       String?
+  paymentMethod   String?
+  bankRef         String?
 
-  lineItems     Json
-  notes         String?
+  lineItems Json
+  notes     String?
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tenantId, status])
 }
@@ -472,7 +514,7 @@ model TyreCatalogItem {
   retailPriceEur Float
   partnerCostEur Float?
   platformFeeEur Float                @default(0)
-  stockNote      String?  
+  stockNote      String?
   isActive       Boolean              @default(true)
   fitments       VehicleFitmentRule[]
   createdAt      DateTime             @default(now())
@@ -502,17 +544,17 @@ model VehicleFitmentRule {
 }
 
 model DispatchAttempt {
-  id               String         @id @default(cuid())
-  requestId        String
-  request          ServiceRequest @relation(fields: [requestId], references: [id])
-  technicianId     String
-  technician       User           @relation("TechnicianDispatchAttempts", fields: [technicianId], references: [id])
-  radiusKm         Float
-  distanceKm       Float
+  id           String         @id @default(cuid())
+  requestId    String
+  request      ServiceRequest @relation(fields: [requestId], references: [id])
+  technicianId String
+  technician   User           @relation("TechnicianDispatchAttempts", fields: [technicianId], references: [id])
+  radiusKm     Float
+  distanceKm   Float
   estimatedMinutes Int
-  status           String         @default("NOTIFIED")
-  notifiedAt       DateTime       @default(now())
-  respondedAt      DateTime?
+  status       String         @default("NOTIFIED")
+  notifiedAt   DateTime       @default(now())
+  respondedAt  DateTime?
 
   @@index([requestId])
   @@index([technicianId, status])
@@ -524,7 +566,7 @@ model AttestationRecord {
   subjectId   String
   mode        String
   hash        String
-  txId        String?  
+  txId        String?
   txHash      String?
   payloadJson Json
   rawJson     Json?
