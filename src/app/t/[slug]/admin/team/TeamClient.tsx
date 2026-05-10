@@ -2,9 +2,12 @@
 import { useState } from "react";
 import Link from "next/link";
 
+type ServiceArea = { id: string; name: string; city: string; radiusKm: number };
+
 type Tech = {
   id: string; userId: string; isOnline: boolean;
   isAvailable: boolean; totalJobs: number;
+  serviceAreaId: string | null;
   user: { id: string; name: string; email: string; phone: string | null };
 };
 
@@ -48,14 +51,15 @@ function LimitBar({ current, max }: { current: number; max: number }) {
 }
 
 export default function TeamClient({
-  tenantId, tenantSlug, technicians: initial, planLabel, maxTechnicians,
+  tenantId, tenantSlug, technicians: initial, serviceAreas, planLabel, maxTechnicians,
 }: {
   tenantId: string; tenantSlug: string; technicians: Tech[];
+  serviceAreas: ServiceArea[];
   planLabel: string; maxTechnicians: number;
 }) {
   const [techs, setTechs] = useState<Tech[]>(initial);
   const [editing, setEditing] = useState<string | null>(null);
-  const [editData, setEditData] = useState({ name: "", phone: "", email: "" });
+  const [editData, setEditData] = useState({ name: "", phone: "", email: "", serviceAreaId: "" });
   const [saving, setSaving] = useState(false);
   const [newPassword, setNewPassword] = useState<{ techId: string; password: string } | null>(null);
   const [showAdd, setShowAdd] = useState(false);
@@ -67,7 +71,7 @@ export default function TeamClient({
 
   const startEdit = (tech: Tech) => {
     setEditing(tech.id);
-    setEditData({ name: tech.user.name, phone: tech.user.phone ?? "", email: tech.user.email });
+    setEditData({ name: tech.user.name, phone: tech.user.phone ?? "", email: tech.user.email, serviceAreaId: tech.serviceAreaId ?? "" });
     setNewPassword(null); setMsg(null);
   };
 
@@ -76,11 +80,19 @@ export default function TeamClient({
     const res = await fetch(`/api/t/${tenantSlug}/team/${tech.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(editData),
+      body: JSON.stringify({
+        name: editData.name,
+        phone: editData.phone,
+        email: editData.email,
+        serviceAreaId: editData.serviceAreaId || null,
+      }),
     });
     setSaving(false);
     if (res.ok) {
-      setTechs((p) => p.map((t) => t.id === tech.id ? { ...t, user: { ...t.user, ...editData } } : t));
+      setTechs((p) => p.map((t) => t.id === tech.id
+        ? { ...t, serviceAreaId: editData.serviceAreaId || null, user: { ...t.user, name: editData.name, phone: editData.phone, email: editData.email } }
+        : t
+      ));
       setEditing(null);
       setMsg("✅ Στοιχεία ενημερώθηκαν");
     } else { setMsg("❌ Σφάλμα αποθήκευσης"); }
@@ -209,6 +221,17 @@ export default function TeamClient({
                     </div>
                     <div className="text-sm text-slate-400">{tech.user.phone}</div>
                     <div className="text-xs text-slate-500">{tech.user.email}</div>
+                    <div className="text-xs mt-1">
+                      {tech.serviceAreaId
+                        ? (() => {
+                            const area = serviceAreas.find(a => a.id === tech.serviceAreaId);
+                            return area
+                              ? <span className="text-indigo-400">📍 {area.name} ({area.city})</span>
+                              : <span className="text-slate-600">📍 Περιοχή άγνωστη</span>;
+                          })()
+                        : <span className="text-amber-500/80">⚠️ Χωρίς περιοχή κάλυψης</span>
+                      }
+                    </div>
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-2 shrink-0">
@@ -239,6 +262,27 @@ export default function TeamClient({
                     <label className="text-xs text-slate-400 block mb-1">Email</label>
                     <input type="email" value={editData.email} onChange={(e) => setEditData((p) => ({ ...p, email: e.target.value }))}
                       className="w-full bg-slate-800 border border-white/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-purple-500 transition" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400 block mb-1">📍 Περιοχή Κάλυψης</label>
+                    {serviceAreas.length === 0 ? (
+                      <p className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                        Δεν υπάρχουν περιοχές. Προσθέστε πρώτα service areas από τον admin.
+                      </p>
+                    ) : (
+                      <select
+                        value={editData.serviceAreaId}
+                        onChange={(e) => setEditData((p) => ({ ...p, serviceAreaId: e.target.value }))}
+                        className="w-full bg-slate-800 border border-white/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-purple-500 transition"
+                      >
+                        <option value="">-- Χωρίς ανάθεση --</option>
+                        {serviceAreas.map((area) => (
+                          <option key={area.id} value={area.id}>
+                            {area.name} — {area.city} ({area.radiusKm}km)
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </div>
                   {newPassword?.techId === tech.id && (
                     <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3">

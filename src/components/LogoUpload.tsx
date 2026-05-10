@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import Image from "next/image";
+import { useRouter } from "next/navigation";
 
 interface Props {
   tenantSlug: string;
@@ -10,6 +10,7 @@ interface Props {
 }
 
 export default function LogoUpload({ tenantSlug, initialLogo, tenantName }: Props) {
+  const router = useRouter();
   const [logo, setLogo] = useState(initialLogo);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
@@ -47,10 +48,8 @@ export default function LogoUpload({ tenantSlug, initialLogo, tenantName }: Prop
       if (response.ok) {
         setLogo(data.logoUrl);
         setMessage("✓ Logo uploaded successfully");
-        // Reset file input
-        if (fileInputRef.current) {
-          fileInputRef.current.value = "";
-        }
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        router.refresh();
       } else {
         setMessage(`❌ ${data.message || "Upload failed"}`);
       }

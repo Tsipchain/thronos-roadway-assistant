@@ -19,11 +19,18 @@ export default async function TeamPage({ params }: { params: { slug: string } })
   });
   if (!tenant) redirect("/login");
 
-  const technicians = await prisma.technicianProfile.findMany({
-    where: { companyId: tenant.id },
-    include: { user: { select: { id: true, name: true, email: true, phone: true } } },
-    orderBy: { totalJobs: "desc" },
-  });
+  const [technicians, serviceAreas] = await Promise.all([
+    prisma.technicianProfile.findMany({
+      where: { companyId: tenant.id },
+      include: { user: { select: { id: true, name: true, email: true, phone: true } } },
+      orderBy: { totalJobs: "desc" },
+    }),
+    prisma.serviceArea.findMany({
+      where: { companyId: tenant.id, isActive: true },
+      orderBy: { city: "asc" },
+      select: { id: true, name: true, city: true, radiusKm: true },
+    }),
+  ]);
 
   const plan = getPlan(tenant.plan);
 
@@ -33,8 +40,11 @@ export default async function TeamPage({ params }: { params: { slug: string } })
       tenantSlug={params.slug}
       technicians={technicians.map((t) => ({
         id: t.id, userId: t.userId, isOnline: t.isOnline,
-        isAvailable: t.isAvailable, totalJobs: t.totalJobs, user: t.user,
+        isAvailable: t.isAvailable, totalJobs: t.totalJobs,
+        serviceAreaId: t.serviceAreaId ?? null,
+        user: t.user,
       }))}
+      serviceAreas={serviceAreas}
       planLabel={plan.label}
       maxTechnicians={plan.maxTechnicians}
     />
