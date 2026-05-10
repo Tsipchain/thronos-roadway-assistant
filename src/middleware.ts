@@ -6,31 +6,44 @@ export default withAuth(
     const token = req.nextauth.token;
     const path = req.nextUrl.pathname;
 
-    // /admin requires SUPER_ADMIN
+    // /admin → SUPER_ADMIN only; redirect others to their correct dashboard
     if (path.startsWith("/admin") && token?.role !== "SUPER_ADMIN") {
-      // Redirect tenant admins to their own dashboard
-      if (token?.tenantSlug && (token.role === "ADMIN" || token.role === "TECHNICIAN")) {
-        return NextResponse.redirect(
-          new URL(`/t/${token.tenantSlug}/admin`, req.url)
-        );
+      if (token?.tenantSlug) {
+        if (token.role === "ADMIN") {
+          return NextResponse.redirect(new URL(`/t/${token.tenantSlug}/admin`, req.url));
+        }
+        if (token.role === "TECHNICIAN") {
+          return NextResponse.redirect(new URL(`/t/${token.tenantSlug}/tech`, req.url));
+        }
       }
       return NextResponse.redirect(new URL("/login", req.url));
     }
 
-    // /t/[slug]/admin requires ADMIN or SUPER_ADMIN, and matching tenant
+    // /t/[slug]/admin → ADMIN (matching tenant) or SUPER_ADMIN
     const tenantAdminMatch = path.match(/^\/t\/([^\/]+)\/admin/);
     if (tenantAdminMatch) {
       const slug = tenantAdminMatch[1];
       if (
         token?.role !== "SUPER_ADMIN" &&
-        !((
-          token?.role === "ADMIN" || token?.role === "TECHNICIAN"
-        ) && token?.tenantSlug === slug)
+        !(token?.role === "ADMIN" && token?.tenantSlug === slug)
       ) {
         return NextResponse.redirect(new URL("/login", req.url));
       }
     }
 
+    // /t/[slug]/tech → TECHNICIAN (matching tenant) or SUPER_ADMIN
+    const tenantTechMatch = path.match(/^\/t\/([^\/]+)\/tech/);
+    if (tenantTechMatch) {
+      const slug = tenantTechMatch[1];
+      if (
+        token?.role !== "SUPER_ADMIN" &&
+        !(token?.role === "TECHNICIAN" && token?.tenantSlug === slug)
+      ) {
+        return NextResponse.redirect(new URL("/login", req.url));
+      }
+    }
+
+    // /dashboard → any authenticated user (handled in page)
     return NextResponse.next();
   },
   {
@@ -41,5 +54,5 @@ export default withAuth(
 );
 
 export const config = {
-  matcher: ["/admin/:path*", "/t/:path*/admin/:path*"],
+  matcher: ["/admin/:path*", "/t/:path*/admin/:path*", "/t/:path*/tech/:path*", "/dashboard"],
 };

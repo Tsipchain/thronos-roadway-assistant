@@ -11,7 +11,7 @@ function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const callbackUrl = params.get("callbackUrl") ?? "/admin";
+  const callbackUrl = params.get("callbackUrl") ?? "/dashboard";
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,6 +64,9 @@ function LoginForm() {
       >
         {loading ? "Σύνδεση..." : "Σύνδεση →"}
       </button>
+      <p className="text-center text-slate-600 text-xs pt-2">
+        Πρώτη φορά; <a href="/setup" className="text-purple-400 hover:text-purple-300">Αρχικοποίηση βάσης →</a>
+      </p>
     </form>
   );
 }
