@@ -1,11 +1,12 @@
 import Redis from 'ioredis';
 
-const globalForRedis = globalThis as unknown as { redis?: Redis };
+const globalForRedis = globalThis as unknown as { redis?: Redis | null };
 
-function createRedisClient(): Redis {
+function createRedisClient(): Redis | null {
   const url = process.env.REDIS_URL;
   if (!url) {
-    throw new Error('REDIS_URL environment variable is not set');
+    console.warn('[Redis] REDIS_URL not set — Redis features disabled');
+    return null;
   }
 
   const client = new Redis(url, {
@@ -21,14 +22,15 @@ function createRedisClient(): Redis {
   return client;
 }
 
-export const redis: Redis =
-  globalForRedis.redis ?? (globalForRedis.redis = createRedisClient());
+export const redis: Redis | null =
+  globalForRedis.redis !== undefined
+    ? globalForRedis.redis
+    : (globalForRedis.redis = createRedisClient());
 
 if (process.env.NODE_ENV !== 'production') {
   globalForRedis.redis = redis;
 }
 
-// Graceful shutdown
-if (typeof process !== 'undefined') {
+if (typeof process !== 'undefined' && redis) {
   process.on('beforeExit', () => redis.disconnect());
 }
