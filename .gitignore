@@ -14,3 +14,4 @@ artifacts
 deployments/*.local.json
 data/import/*.private.csv
 *.log
+*.tsbuildinfo
