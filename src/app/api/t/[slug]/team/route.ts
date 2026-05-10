@@ -3,12 +3,13 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { canAccessTenant } from "@/lib/tenant";
+import { getPlan, isUnlimited } from "@/lib/plans";
 import { hash } from "bcryptjs";
 import { UserRole } from "@prisma/client";
 
 async function resolveTenant(slug: string, session: Awaited<ReturnType<typeof getServerSession>>) {
   if (!session || !canAccessTenant(session.user.role, session.user.tenantSlug, slug)) return null;
-  return prisma.partnerCompany.findUnique({ where: { slug }, select: { id: true } });
+  return prisma.partnerCompany.findUnique({ where: { slug }, select: { id: true, plan: true } });
 }
 
 export async function GET(req: NextRequest, { params }: { params: { slug: string } }) {
@@ -28,6 +29,18 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
   const session = await getServerSession(authOptions);
   const tenant = await resolveTenant(params.slug, session);
   if (!tenant) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  // Plan limit check
+  const plan = getPlan(tenant.plan);
+  if (!isUnlimited(plan.maxTechnicians)) {
+    const count = await prisma.technicianProfile.count({ where: { tenantId: tenant.id } });
+    if (count >= plan.maxTechnicians) {
+      return NextResponse.json({
+        error: `Όριο πλανού: το ${plan.label} επιτρέπει μέχρι ${plan.maxTechnicians} τεχνικούς. Αναβαθμίστε σε Pro ή Enterprise.`,
+        limitReached: true,
+      }, { status: 403 });
+    }
+  }
 
   const { name, phone, email, password } = await req.json();
   if (!name || !phone || !password)
@@ -50,11 +63,8 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
   });
 
   return NextResponse.json({
-    id: profile.id,
-    userId: profile.userId,
-    isOnline: profile.isOnline,
-    isAvailable: profile.isAvailable,
-    totalJobs: profile.totalJobs,
-    user: profile.user,
+    id: profile.id, userId: profile.userId,
+    isOnline: profile.isOnline, isAvailable: profile.isAvailable,
+    totalJobs: profile.totalJobs, user: profile.user,
   }, { status: 201 });
 }
