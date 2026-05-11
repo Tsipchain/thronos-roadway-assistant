@@ -4,6 +4,11 @@ import { useState, useEffect, useCallback } from "react";
 import { translations, LOCALES, type LocaleKey } from "@/i18n/translations";
 
 const STORAGE_KEY = "roadway_locale";
+const COOKIE_NAME = "roadway_locale";
+
+function setCookie(value: string) {
+  document.cookie = `${COOKIE_NAME}=${value};path=/;max-age=${60*60*24*365};samesite=lax`;
+}
 
 function detectLocale(): LocaleKey {
   if (typeof window === "undefined") return "el";
@@ -17,12 +22,15 @@ export function useLocale() {
   const [locale, setLocaleState] = useState<LocaleKey>("el");
 
   useEffect(() => {
-    setLocaleState(detectLocale());
+    const detected = detectLocale();
+    setLocaleState(detected);
+    setCookie(detected);
   }, []);
 
   const setLocale = useCallback((l: LocaleKey) => {
     setLocaleState(l);
     localStorage.setItem(STORAGE_KEY, l);
+    setCookie(l);
   }, []);
 
   return { locale, setLocale, t: translations[locale], locales: LOCALES };

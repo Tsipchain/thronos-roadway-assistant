@@ -1,16 +1,8 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-
-const STATUS_LABELS: Record<string, string> = {
-  PENDING:     "Αναζήτηση Τεχνικού...",
-  ACCEPTED:    "Τεχνικός Ανατέθηκε",
-  EN_ROUTE:    "Ο Τεχνικός Έρχεται",
-  ARRIVED:     "Ο Τεχνικός Έφτασε",
-  IN_PROGRESS: "Εκτελείται η Επισκευή",
-  COMPLETED:   "Ολοκληρώθηκε!",
-  CANCELLED:   "Ακυρώθηκε",
-};
+import { useLocale } from "@/hooks/useLocale";
+import type { Translations } from "@/i18n/translations";
 
 const STATUS_ICONS: Record<string, string> = {
   PENDING:     "🔍",
@@ -23,14 +15,6 @@ const STATUS_ICONS: Record<string, string> = {
 };
 
 const STATUS_ORDER = ["PENDING", "ACCEPTED", "EN_ROUTE", "ARRIVED", "IN_PROGRESS", "COMPLETED"];
-
-const SERVICE_LABELS: Record<string, string> = {
-  BATTERY_REPLACEMENT: "Αντικατάσταση Μπαταρίας",
-  BATTERY_CHARGE:      "Φόρτιση Μπαταρίας",
-  TIRE_CHANGE:         "Αλλαγή Λάστιχου",
-  TIRE_REPAIR:         "Επισκευή Λάστιχου",
-  DIAGNOSIS:           "Διάγνωση",
-};
 
 type Payment = { status: string; method: string; amount: number } | null;
 
@@ -55,17 +39,19 @@ type RequestData = {
   payment: Payment;
 };
 
-function formatCountdown(s: number) {
-  if (s <= 0) return "Φθάνει τώρα";
+function formatCountdown(s: number, arrivedNowLabel: string) {
+  if (s <= 0) return arrivedNowLabel;
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
 function PaymentSection({
   data,
   onPaymentUpdate,
+  t,
 }: {
   data: RequestData;
   onPaymentUpdate: (p: Payment) => void;
+  t: Translations;
 }) {
   const [loading, setLoading] = useState(false);
   const [cryptoOpen, setCryptoOpen] = useState(false);
@@ -120,7 +106,7 @@ function PaymentSection({
         method: "POST",
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Σφάλμα");
+      if (!res.ok) throw new Error(json.error ?? t.common_error);
       window.location.href = json.url;
     } catch (e: any) {
       setErr(e.message);
@@ -142,13 +128,13 @@ function PaymentSection({
       : (data.tenant.ethAddress ?? "");
 
   if (isPaid) {
-    const methodLabel = data.payment!.method === "CASH" ? "Μετρητά" : data.payment!.method === "CARD" ? "Κάρτα" : "Crypto";
+    const methodLabel = data.payment!.method === "CASH" ? t.tech_payment_cash : data.payment!.method === "CARD" ? t.tech_payment_card : "Crypto";
     return (
       <div className="bg-green-500/10 border border-green-500/30 rounded-2xl p-5 mb-4">
         <div className="flex items-center gap-3">
           <span className="text-3xl">✅</span>
           <div>
-            <div className="font-semibold text-green-300">Πληρώθηκε</div>
+            <div className="font-semibold text-green-300">{t.track_paid}</div>
             <div className="text-sm text-slate-400">{data.payment!.amount}€ · {methodLabel}</div>
           </div>
         </div>
@@ -161,15 +147,15 @@ function PaymentSection({
     return (
       <div className="bg-indigo-500/10 border border-indigo-500/40 rounded-2xl p-6 mb-4 text-center">
         <div className="text-5xl mb-3">💳</div>
-        <div className="font-bold text-lg text-indigo-300 mb-1">Μεταφορά στη σελίδα πληρωμής</div>
-        <div className="text-slate-400 text-sm mb-4">Ποσό: <span className="text-white font-semibold">{amount}€</span></div>
+        <div className="font-bold text-lg text-indigo-300 mb-1">{t.track_payment_pending}</div>
+        <div className="text-slate-400 text-sm mb-4">{t.track_amount_label}: <span className="text-white font-semibold">{amount}€</span></div>
         <div className="text-6xl font-mono font-bold text-indigo-400 mb-4">{redirectCount}</div>
         <button
           onClick={payWithStripe}
           disabled={loading}
           className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white font-semibold transition"
         >
-          {loading ? "⚙️ Φόρτωση..." : "💳 Πληρωμή τώρα →"}
+          {loading ? `⚙️ ${t.common_loading}` : `💳 ${t.track_pay_now} →`}
         </button>
       </div>
     );
@@ -178,8 +164,8 @@ function PaymentSection({
   return (
     <>
       <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-4">
-        <h2 className="font-semibold mb-1 text-sm text-slate-300">💳 Πληρωμή</h2>
-        <p className="text-xs text-slate-500 mb-4">Ποσό: <span className="text-white font-semibold">{amount}€</span>{data.finalPrice ? "" : " (κατ. εκτίμηση)"}</p>
+        <h2 className="font-semibold mb-1 text-sm text-slate-300">💳 {t.track_payment_title}</h2>
+        <p className="text-xs text-slate-500 mb-4">{t.track_amount_label}: <span className="text-white font-semibold">{amount}€</span>{data.finalPrice ? "" : ` (${t.track_estimated})`}</p>
 
         <div className="space-y-3">
           {/* Stripe */}
@@ -194,7 +180,7 @@ function PaymentSection({
               ) : (
                 <>
                   <span className="text-xl">💳</span>
-                  <span>Πληρώστε με Κάρτα (Stripe)</span>
+                  <span>{t.track_pay_card}</span>
                 </>
               )}
             </button>
@@ -207,7 +193,7 @@ function PaymentSection({
               className="w-full py-3.5 rounded-xl bg-amber-500/20 border border-amber-500/40 hover:bg-amber-500/30 text-amber-300 font-semibold transition flex items-center justify-center gap-2"
             >
               <span className="text-xl">₿</span>
-              <span>Πληρώστε με Crypto (BTC / USDT / USDC)</span>
+              <span>{t.track_pay_crypto}</span>
             </button>
           )}
         </div>
@@ -215,7 +201,7 @@ function PaymentSection({
         {err && <p className="text-red-400 text-xs mt-3">{err}</p>}
 
         <p className="text-xs text-slate-600 text-center mt-3">
-          🔒 Ασφαλής πληρωμή μέσω Stripe · Powered by Thronos Chain
+          🔒 {t.track_secure_payment}
         </p>
       </div>
 
@@ -224,7 +210,7 @@ function PaymentSection({
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-4">
           <div className="bg-slate-900 border border-white/10 rounded-2xl w-full max-w-sm p-6 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-lg">Πληρωμή με Crypto</h3>
+              <h3 className="font-bold text-lg">{t.track_pay_crypto}</h3>
               <button onClick={() => setCryptoOpen(false)} className="text-slate-500 hover:text-white text-xl">×</button>
             </div>
 
@@ -282,7 +268,7 @@ function PaymentSection({
                 </div>
 
                 <div className="bg-slate-800 rounded-xl p-3 mb-3">
-                  <div className="text-xs text-slate-500 mb-1">Διεύθυνση</div>
+                  <div className="text-xs text-slate-500 mb-1">{t.track_address}</div>
                   <div className="font-mono text-xs break-all text-slate-200">{currentAddress}</div>
                 </div>
 
@@ -290,7 +276,7 @@ function PaymentSection({
                   onClick={() => copy(currentAddress)}
                   className="w-full py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-sm font-medium transition mb-4"
                 >
-                  {copied ? "✅ Αντιγράφηκε!" : "📋 Αντιγραφή Διεύθυνσης"}
+                  {copied ? `✅ ${t.common_copied}` : `📋 ${t.common_copy}`}
                 </button>
               </>
             )}
@@ -306,14 +292,14 @@ function PaymentSection({
 
             {cryptoConfirmed ? (
               <div className="text-center text-green-400 text-sm py-2">
-                ✅ Ευχαριστούμε! Ο τεχνικός θα επιβεβαιώσει την απόδειξη.
+                ✅ {t.track_crypto_sent}
               </div>
             ) : (
               <button
                 onClick={() => setCryptoConfirmed(true)}
                 className="w-full py-3 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 font-semibold text-sm transition hover:bg-amber-500/30"
               >
-                Απέστειλα την πληρωμή →
+                {t.track_crypto_confirm} →
               </button>
             )}
           </div>
@@ -327,6 +313,25 @@ export default function TrackingClient({ initial }: { initial: RequestData }) {
   const [data, setData]         = useState<RequestData>(initial);
   const [secondsLeft, setSecs]  = useState<number | null>(null);
   const [lastRefresh, setRefresh] = useState(new Date());
+  const { t } = useLocale();
+
+  const STATUS_LABELS: Record<string, string> = {
+    PENDING:     t.status_PENDING,
+    ACCEPTED:    t.status_ACCEPTED,
+    EN_ROUTE:    t.status_EN_ROUTE,
+    ARRIVED:     t.status_ARRIVED,
+    IN_PROGRESS: t.status_IN_PROGRESS,
+    COMPLETED:   t.status_COMPLETED,
+    CANCELLED:   t.status_CANCELLED,
+  };
+
+  const SERVICE_LABELS: Record<string, string> = {
+    BATTERY_REPLACEMENT: t.services.BATTERY_REPLACEMENT,
+    BATTERY_CHARGE:      t.services.BATTERY_CHARGE,
+    TIRE_CHANGE:         t.services.TIRE_CHANGE,
+    TIRE_REPAIR:         t.services.TIRE_REPAIR,
+    DIAGNOSIS:           t.services.DIAGNOSIS,
+  };
 
   const showCountdown =
     (data.status === "ACCEPTED" || data.status === "EN_ROUTE") &&
@@ -375,12 +380,12 @@ export default function TrackingClient({ initial }: { initial: RequestData }) {
 
           {showCountdown && secondsLeft !== null && (
             <div className="mt-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4">
-              <p className="text-amber-400 text-xs uppercase tracking-widest mb-1">Εκτιμώμενος χρόνος άφιξης</p>
+              <p className="text-amber-400 text-xs uppercase tracking-widest mb-1">{t.track_eta_label}</p>
               <div className="text-4xl font-mono font-bold text-amber-300 tabular-nums">
-                {formatCountdown(secondsLeft)}
+                {formatCountdown(secondsLeft, t.track_arrives_now)}
               </div>
               {data.estimatedMinutes && (
-                <p className="text-amber-500/70 text-xs mt-1">~{data.estimatedMinutes} λεπτά συνολικά</p>
+                <p className="text-amber-500/70 text-xs mt-1">~{data.estimatedMinutes} min</p>
               )}
             </div>
           )}
@@ -406,8 +411,8 @@ export default function TrackingClient({ initial }: { initial: RequestData }) {
               ))}
             </div>
             <div className="flex justify-between mt-2">
-              {["Αναμονή", "Ανάθεση", "Δρόμο", "Άφιξη", "Επισκευή", "Τέλος"].map((l) => (
-                <span key={l} className="text-xs text-slate-600 text-center" style={{ flex: 1 }}>{l}</span>
+              {[t.status_PENDING, t.status_ACCEPTED, t.status_EN_ROUTE, t.status_ARRIVED, t.status_IN_PROGRESS, t.status_COMPLETED].map((l) => (
+                <span key={l} className="text-xs text-slate-600 text-center" style={{ flex: 1 }}>{l.split(" ")[0]}</span>
               ))}
             </div>
           </div>
@@ -415,16 +420,16 @@ export default function TrackingClient({ initial }: { initial: RequestData }) {
 
         {/* Job details */}
         <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-4">
-          <h2 className="font-semibold mb-4 text-sm text-slate-300">Λεπτομέρειες</h2>
+          <h2 className="font-semibold mb-4 text-sm text-slate-300">{t.track_job_details}</h2>
           <div className="space-y-3 text-sm">
-            <Row label="Υπηρεσία" value={SERVICE_LABELS[data.serviceType] ?? data.serviceType} />
-            <Row label="Όχημα" value={`${data.vehicle.make} ${data.vehicle.model}`} />
-            <Row label="Πινακίδα" value={<span className="font-mono">{data.vehicle.licensePlate}</span>} />
+            <Row label={t.track_service} value={SERVICE_LABELS[data.serviceType] ?? data.serviceType} />
+            <Row label={t.track_vehicle} value={`${data.vehicle.make} ${data.vehicle.model}`} />
+            <Row label={t.track_license_plate} value={<span className="font-mono">{data.vehicle.licensePlate}</span>} />
             {data.estimatedPrice != null && !data.finalPrice && (
-              <Row label="Εκτίμηση" value={<span className="text-purple-300 font-semibold">{data.estimatedPrice}€</span>} />
+              <Row label={t.track_estimated} value={<span className="text-purple-300 font-semibold">{data.estimatedPrice}€</span>} />
             )}
             {data.finalPrice != null && (
-              <Row label="Τελικό Κόστος" value={<span className="text-green-300 font-semibold">{data.finalPrice}€</span>} />
+              <Row label={t.track_final_cost} value={<span className="text-green-300 font-semibold">{data.finalPrice}€</span>} />
             )}
           </div>
         </div>
@@ -433,12 +438,13 @@ export default function TrackingClient({ initial }: { initial: RequestData }) {
         <PaymentSection
           data={data}
           onPaymentUpdate={(p) => setData((prev) => ({ ...prev, payment: p }))}
+          t={t}
         />
 
         {/* Technician */}
         {data.technician && (
           <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-4">
-            <h2 className="font-semibold mb-3 text-sm text-slate-300">Τεχνικός</h2>
+            <h2 className="font-semibold mb-3 text-sm text-slate-300">{t.track_technician}</h2>
             <div className="flex items-center justify-between">
               <div>
                 <div className="font-medium">{data.technician.name}</div>
@@ -447,7 +453,7 @@ export default function TrackingClient({ initial }: { initial: RequestData }) {
               {data.technician.phone && (
                 <a href={`tel:${data.technician.phone}`}
                   className="bg-green-600 hover:bg-green-500 text-white text-sm font-medium px-4 py-2 rounded-xl transition">
-                  📞 Κλήση
+                  📞 {t.track_call_tech}
                 </a>
               )}
             </div>
@@ -457,7 +463,7 @@ export default function TrackingClient({ initial }: { initial: RequestData }) {
         {/* Company contact */}
         {data.tenant?.phone && (
           <div className="text-center mb-4">
-            <p className="text-slate-500 text-sm">Χρειάζεστε βοήθεια;</p>
+            <p className="text-slate-500 text-sm">{t.track_need_help}</p>
             <a href={`tel:${data.tenant.phone}`} className="text-blue-400 hover:text-blue-300 text-sm">
               📞 {data.tenant.name}: {data.tenant.phone}
             </a>
@@ -467,18 +473,18 @@ export default function TrackingClient({ initial }: { initial: RequestData }) {
         {!isCompleted && !isCancelled && (
           <div className="text-center mb-4">
             <button onClick={refresh} className="text-slate-500 hover:text-slate-300 text-xs transition">
-              ↻ Ανανέωση κατάστασης
+              ↻ {t.track_refresh}
             </button>
             <p className="text-slate-700 text-xs mt-1">
-              Αυτόματη ανανέωση κάθε 30"· τελευταία:{" "}
-              {lastRefresh.toLocaleTimeString("el-GR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+              {t.track_auto_refresh}{" "}
+              {lastRefresh.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
             </p>
           </div>
         )}
 
         <div className="text-center">
           <Link href={`/t/${data.tenant.slug}`} className="text-slate-600 hover:text-slate-400 text-sm transition">
-            ← Νέο Αίτημα
+            ← {t.track_new_request}
           </Link>
         </div>
       </div>

@@ -3,6 +3,7 @@ import { redirect, notFound } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { canAccessTenant } from "@/lib/tenant";
+import { getT } from "@/lib/locale";
 import Link from "next/link";
 import LogoutButton from "@/components/LogoutButton";
 import LogoUpload from "@/components/LogoUpload";
@@ -17,14 +18,6 @@ const STATUS_COLORS: Record<string, string> = {
   COMPLETED:   "bg-green-500/20 text-green-300",
   CANCELLED:   "bg-red-500/20 text-red-300",
   ARRIVED:     "bg-indigo-500/20 text-indigo-300",
-};
-
-const SERVICE_LABELS: Record<string, string> = {
-  BATTERY_REPLACEMENT: "Αντικ. Μπαταρίας",
-  BATTERY_CHARGE:      "Φόρτιση Μπαταρίας",
-  TIRE_CHANGE:         "Αλλαγή Λάστιχου",
-  TIRE_REPAIR:         "Επισκευή Λάστιχου",
-  DIAGNOSIS:           "Διάγνωση",
 };
 
 export default async function TenantAdminPage({ params }: { params: { slug: string } }) {
@@ -69,7 +62,15 @@ export default async function TenantAdminPage({ params }: { params: { slug: stri
     }),
   ]);
 
-  const onlineTechs = tenant.technicians.filter((t) => t.isOnline).length;
+  const onlineTechs = tenant.technicians.filter((tech) => tech.isOnline).length;
+  const t = getT();
+  const SERVICE_LABELS: Record<string, string> = {
+    BATTERY_REPLACEMENT: t.services.BATTERY_REPLACEMENT,
+    BATTERY_CHARGE:      t.services.BATTERY_CHARGE,
+    TIRE_CHANGE:         t.services.TIRE_CHANGE,
+    TIRE_REPAIR:         t.services.TIRE_REPAIR,
+    DIAGNOSIS:           t.services.DIAGNOSIS,
+  };
 
   return (
     <main className="min-h-screen bg-slate-950 text-white p-6">
@@ -96,17 +97,17 @@ export default async function TenantAdminPage({ params }: { params: { slug: stri
               href={`/t/${params.slug}/admin/stats`}
               className="text-sm bg-blue-600/20 border border-blue-500/30 px-4 py-2 rounded-xl hover:bg-blue-600/30 transition text-blue-300"
             >
-              📊 Στατιστικά
+              📊 {t.admin_stats}
             </Link>
             <Link href={`/t/${params.slug}/admin/technicians`}
               className="text-sm bg-indigo-600/20 border border-indigo-500/30 px-4 py-2 rounded-xl hover:bg-indigo-600/30 transition text-indigo-300">
-              🗺️ Service Areas
+              🗺️ {t.admin_service_areas}
             </Link>
             <Link
               href={`/t/${params.slug}/admin/team`}
               className="text-sm bg-purple-600/20 border border-purple-500/30 px-4 py-2 rounded-xl hover:bg-purple-600/30 transition text-purple-300"
             >
-              👥 Ομάδα ({tenant.technicians.length})
+              👥 {t.admin_team} ({tenant.technicians.length})
             </Link>
             <Link
               href={`/t/${params.slug}/admin/jobs`}
@@ -116,7 +117,7 @@ export default async function TenantAdminPage({ params }: { params: { slug: stri
                   : "bg-white/5 border-white/10 text-slate-300 hover:bg-white/10"
               }`}
             >
-              📋 Jobs{pendingJobs > 0 ? ` (${pendingJobs} νέα)` : ""}
+              📋 {t.admin_jobs}{pendingJobs > 0 ? ` (${pendingJobs} ${t.admin_pending_badge})` : ""}
             </Link>
             <Link href={`/t/${params.slug}/admin/qr`}
               className="text-sm bg-white/5 border border-white/10 px-4 py-2 rounded-xl hover:bg-white/10 transition">
@@ -180,12 +181,12 @@ export default async function TenantAdminPage({ params }: { params: { slug: stri
                 : "bg-green-500/20 text-green-300";
 
           const statusLabel = isBlocked
-            ? "ΑΠΟΚΛΕΙΣΜΕΝΗ"
+            ? t.admin_subscription_blocked
             : isWarn
-              ? "ΛΗΞΗ (GRACE)"
+              ? t.admin_subscription_expired
               : soonAlert
-                ? "ΛΗΓΕΙ ΣΥΝΤΟΜΑ"
-                : "ΕΝΕΡΓΗ";
+                ? t.admin_subscription_expiring
+                : t.admin_subscription_active;
 
           const statusIcon = isBlocked ? "🔴" : isWarn ? "🟠" : soonAlert ? "🟡" : "🟢";
 
@@ -195,17 +196,17 @@ export default async function TenantAdminPage({ params }: { params: { slug: stri
                 <div className="text-3xl">{statusIcon}</div>
                 <div>
                   <div className="font-semibold text-sm text-slate-200">
-                    Συνδρομή · Πλάνο {tenant.plan}
+                    {t.admin_plan_label} · {tenant.plan}
                   </div>
                   {until ? (
                     <div className="text-xs text-slate-400 mt-0.5">
                       {isActive
-                        ? <>Λήγει <strong className="text-white">{until.toLocaleDateString("el-GR")}</strong> &middot; {daysLeft} ημέρες</>
-                        : <>Έληξε <strong className="text-white">{until.toLocaleDateString("el-GR")}</strong> &middot; {daysOverdue} ημέρες πριν</>
+                        ? <>{t.admin_expires_label} <strong className="text-white">{until.toLocaleDateString()}</strong> &middot; {daysLeft} {t.admin_days_left}</>
+                        : <>{t.admin_subscription_expired} <strong className="text-white">{until.toLocaleDateString()}</strong> &middot; {daysOverdue} {t.admin_days_overdue}</>
                       }
                     </div>
                   ) : (
-                    <div className="text-xs text-slate-400 mt-0.5">Χωρίς ενεργή συνδρομή</div>
+                    <div className="text-xs text-slate-400 mt-0.5">{t.admin_subscription_expired}</div>
                   )}
                 </div>
               </div>
@@ -215,7 +216,7 @@ export default async function TenantAdminPage({ params }: { params: { slug: stri
                   href={`/t/${params.slug}/admin/payout-settings`}
                   className="text-xs bg-white/5 border border-white/10 px-3 py-1.5 rounded-xl hover:bg-white/10 transition text-slate-300"
                 >
-                  💰 Ρυθμίσεις Πληρωμής →
+                  💰 {t.admin_payout_settings} →
                 </Link>
               </div>
             </div>
@@ -225,10 +226,10 @@ export default async function TenantAdminPage({ params }: { params: { slug: stri
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           {[
-            { label: "Τεχνικοί Online", value: onlineTechs,                color: "text-green-400" },
-            { label: "Ενεργά Jobs",     value: activeJobs,                 color: "text-amber-400" },
-            { label: "Ολοκληρωμένα",   value: completedJobs,              color: "text-blue-400" },
-            { label: "Περιοχές",       value: tenant.serviceAreas.length, color: "text-purple-400" },
+            { label: t.admin_online_count,      value: onlineTechs,                color: "text-green-400" },
+            { label: t.admin_jobs,              value: activeJobs,                 color: "text-amber-400" },
+            { label: t.status_COMPLETED,        value: completedJobs,              color: "text-blue-400" },
+            { label: t.admin_service_areas,     value: tenant.serviceAreas.length, color: "text-purple-400" },
           ].map((s) => (
             <div key={s.label} className="bg-white/5 border border-white/10 rounded-2xl p-5">
               <div className={`text-4xl font-bold ${s.color}`}>{s.value}</div>
@@ -241,7 +242,7 @@ export default async function TenantAdminPage({ params }: { params: { slug: stri
           {/* Technicians */}
           <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="font-semibold">Τεχνικοί</h2>
+              <h2 className="font-semibold">{t.admin_technician}</h2>
               <Link
                 href={`/t/${params.slug}/admin/team`}
                 className="text-xs text-purple-400 hover:text-purple-300 transition"
@@ -259,7 +260,7 @@ export default async function TenantAdminPage({ params }: { params: { slug: stri
                   <span className={`shrink-0 text-xs px-2 py-1 rounded-full ${
                     tech.isOnline ? "bg-green-500/20 text-green-300" : "bg-slate-500/20 text-slate-400"
                   }`}>
-                    {tech.isOnline ? "Online" : "Offline"}
+                    {tech.isOnline ? t.common_online : t.common_offline}
                   </span>
                 </div>
               ))}
@@ -268,7 +269,7 @@ export default async function TenantAdminPage({ params }: { params: { slug: stri
 
           {/* Pricing */}
           <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
-            <h2 className="font-semibold mb-4">Τιμοκατάλογος</h2>
+            <h2 className="font-semibold mb-4">{t.admin_pricing}</h2>
             <div className="space-y-3">
               {tenant.pricingRules.map((p) => (
                 <div key={p.id} className="flex justify-between items-center">
@@ -285,7 +286,7 @@ export default async function TenantAdminPage({ params }: { params: { slug: stri
           {/* Service Areas */}
           <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="font-semibold">Περιοχές</h2>
+              <h2 className="font-semibold">{t.admin_service_areas}</h2>
               <span className="text-xs text-slate-500">{tenant.serviceAreas.length} zones</span>
             </div>
             <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
@@ -302,7 +303,7 @@ export default async function TenantAdminPage({ params }: { params: { slug: stri
         {/* Recent Jobs */}
         <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
           <div className="flex justify-between items-center mb-5">
-            <h2 className="font-semibold">Πρόσφατα Jobs</h2>
+            <h2 className="font-semibold">{t.admin_recent_jobs}</h2>
             <div className="flex gap-3">
               <Link
                 href={`/t/${params.slug}/admin/jobs`}

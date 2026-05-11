@@ -73,6 +73,8 @@ export async function PATCH(
     data: updateData as any,
   });
 
+  let stripeCheckoutUrl: string | null = null;
+
   if (status === "COMPLETED") {
     const techUserId = updated.technicianId ?? session.user.id;
 
@@ -99,8 +101,6 @@ export async function PATCH(
         },
       });
     }
-
-    let stripeCheckoutUrl: string | null = null;
 
     // Record payment
     if (paymentMethod && finalPrice && finalPrice > 0) {
