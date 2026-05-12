@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { useLocale } from "@/hooks/useLocale";
 
 // Extend Window for beforeinstallprompt event
 declare global {
@@ -14,16 +15,6 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
-const STATUS_LABELS: Record<string, string> = {
-  PENDING:     "Εκκρεμεί",
-  ACCEPTED:    "Αποδεκτό",
-  EN_ROUTE:    "Σε δρόμο",
-  ARRIVED:     "Έφτασα",
-  IN_PROGRESS: "Εκτελείται",
-  COMPLETED:   "Ολοκληρώθηκε",
-  CANCELLED:   "Ακυρώθηκε",
-};
-
 const STATUS_COLORS: Record<string, string> = {
   PENDING:     "bg-amber-500/20 text-amber-300",
   ACCEPTED:    "bg-blue-500/20 text-blue-300",
@@ -34,14 +25,6 @@ const STATUS_COLORS: Record<string, string> = {
   CANCELLED:   "bg-red-500/20 text-red-300",
 };
 
-const SERVICE_LABELS: Record<string, string> = {
-  BATTERY_REPLACEMENT: "Αντικ. Μπαταρίας",
-  BATTERY_CHARGE:      "Φόρτιση Μπαταρίας",
-  TIRE_CHANGE:         "Αλλαγή Λάστιχου",
-  TIRE_REPAIR:         "Επισκευή Λάστιχου",
-  DIAGNOSIS:           "Διάγνωση",
-};
-
 const NEXT_STATUS: Record<string, string | null> = {
   PENDING:     "ACCEPTED",
   ACCEPTED:    "EN_ROUTE",
@@ -50,13 +33,6 @@ const NEXT_STATUS: Record<string, string | null> = {
   IN_PROGRESS: "COMPLETED",
   COMPLETED:   null,
   CANCELLED:   null,
-};
-
-const NEXT_LABEL: Record<string, string> = {
-  PENDING:     "✓ Δέχομαι",
-  EN_ROUTE:    "📍 Έφτασα",
-  ARRIVED:     "🔧 Ξεκινώ",
-  IN_PROGRESS: "✅ Ολοκλήρωσα",
 };
 
 const BATTERY_TIERS = [
@@ -123,6 +99,34 @@ export default function TechDashboard({
   userName,
 }: Props) {
   const router = useRouter();
+  const { t } = useLocale();
+
+  // Derived from translations (recalculated when locale changes)
+  const STATUS_LABELS: Record<string, string> = {
+    PENDING:     t.status_PENDING,
+    ACCEPTED:    t.status_ACCEPTED,
+    EN_ROUTE:    t.status_EN_ROUTE,
+    ARRIVED:     t.status_ARRIVED,
+    IN_PROGRESS: t.status_IN_PROGRESS,
+    COMPLETED:   t.status_COMPLETED,
+    CANCELLED:   t.status_CANCELLED,
+  };
+
+  const SERVICE_LABELS: Record<string, string> = {
+    BATTERY_REPLACEMENT: t.services.BATTERY_REPLACEMENT,
+    BATTERY_CHARGE:      t.services.BATTERY_CHARGE,
+    TIRE_CHANGE:         t.services.TIRE_CHANGE,
+    TIRE_REPAIR:         t.services.TIRE_REPAIR,
+    DIAGNOSIS:           t.services.DIAGNOSIS,
+  };
+
+  const NEXT_LABEL: Record<string, string> = {
+    PENDING:     t.tech_accept,
+    ACCEPTED:    t.tech_en_route_btn,
+    EN_ROUTE:    t.tech_arrived_btn,
+    ARRIVED:     t.tech_start_btn,
+    IN_PROGRESS: t.tech_complete_btn,
+  };
   const [jobs, setJobs]               = useState<Job[]>(activeJobs);
   const [isOnline, setIsOnline]       = useState(techProfile?.isOnline ?? false);
   const [updatingId, setUpdatingId]   = useState<string | null>(null);
@@ -220,7 +224,7 @@ export default function TechDashboard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: newStatus, ...extra }),
       });
-      if (!res.ok) throw new Error("Σφάλμα ενημέρωσης");
+      if (!res.ok) throw new Error(t.common_error);
       const resData = await res.json();
       if (newStatus === "COMPLETED") {
         setJobs((prev) => prev.filter((j) => j.id !== requestId));
@@ -288,17 +292,17 @@ export default function TechDashboard({
             <div className="flex items-center gap-3">
               <span className="text-2xl">📲</span>
               <div>
-                <div className="font-semibold text-indigo-300 text-sm">Εγκαταστήστε την εφαρμογή</div>
-                <div className="text-xs text-slate-400">Άμεση πρόσβαση από την αρχική οθόνη</div>
+                <div className="font-semibold text-indigo-300 text-sm">{t.tech_install_title}</div>
+                <div className="text-xs text-slate-400">{t.tech_install_desc}</div>
               </div>
             </div>
             <div className="flex gap-2 shrink-0">
-              <button onClick={() => setInstallPrompt(null)} className="text-slate-500 text-xs px-2 py-1">Αργότερα</button>
+              <button onClick={() => setInstallPrompt(null)} className="text-slate-500 text-xs px-2 py-1">{t.tech_install_later}</button>
               <button
                 onClick={handleInstall}
                 className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-3 py-1.5 rounded-xl transition"
               >
-                Εγκατάσταση
+                {t.tech_install_btn}
               </button>
             </div>
           </div>
@@ -311,11 +315,8 @@ export default function TechDashboard({
               <div className="flex items-start gap-3">
                 <span className="text-2xl">📲</span>
                 <div>
-                  <div className="font-semibold text-blue-300 text-sm">Εγκαταστήστε την εφαρμογή</div>
-                  <div className="text-xs text-slate-400 mt-1">
-                    Πατήστε <span className="text-white font-medium">Κοινοποίηση ↑</span> και μετά{" "}
-                    <span className="text-white font-medium">&ldquo;Προσθήκη στην Αρχική Οθόνη&rdquo;</span>
-                  </div>
+                  <div className="font-semibold text-blue-300 text-sm">{t.tech_install_title}</div>
+                  <div className="text-xs text-slate-400 mt-1" dangerouslySetInnerHTML={{ __html: t.tech_install_ios }} />
                 </div>
               </div>
               <button onClick={() => setShowIosHint(false)} className="text-slate-500 text-lg leading-none">×</button>
@@ -327,8 +328,8 @@ export default function TechDashboard({
           <div className="mb-4 bg-purple-500/20 border border-purple-500/40 rounded-2xl p-4 flex items-center gap-3 animate-pulse">
             <span className="text-2xl">🔔</span>
             <div>
-              <div className="font-semibold text-purple-300">Νέο Job ανατέθηκε!</div>
-              <div className="text-xs text-slate-400">Ελέγξτε τα Ανατεθειμένα παρακάτω</div>
+              <div className="font-semibold text-purple-300">{t.tech_new_job_alert}</div>
+              <div className="text-xs text-slate-400">{t.tech_new_job_desc}</div>
             </div>
           </div>
         )}
@@ -340,7 +341,7 @@ export default function TechDashboard({
             <div>
               <h1 className="font-bold text-base">{userName}</h1>
               <p className="text-slate-500 text-xs">
-                Τεχνικός
+                {t.tech_role_label ?? "Technician"}
                 {myLoc && <span className="text-green-600 ml-1">· GPS ✓</span>}
               </p>
             </div>
@@ -354,15 +355,15 @@ export default function TechDashboard({
                 : "bg-slate-800 border-white/10 text-slate-400 hover:bg-slate-700"
             }`}
           >
-            {togglingOnline ? "..." : isOnline ? "● Online" : "○ Offline"}
+            {togglingOnline ? "..." : isOnline ? `● ${t.tech_online}` : `○ ${t.tech_offline}`}
           </button>
         </div>
 
         <div className="grid grid-cols-3 gap-3 mb-6">
           {[
-            { label: "Ενεργά",   value: jobs.length,                            color: "text-amber-400" },
-            { label: "Σύνολο",   value: completedTotal,                          color: "text-blue-400"  },
-            { label: "Rating ⭐", value: techProfile?.rating.toFixed(1) ?? "—", color: "text-yellow-400" },
+            { label: t.tech_active_jobs,        value: jobs.length,                            color: "text-amber-400" },
+            { label: t.tech_total_jobs,         value: completedTotal,                          color: "text-blue-400"  },
+            { label: `${t.tech_rating} ⭐`,     value: techProfile?.rating.toFixed(1) ?? "—", color: "text-yellow-400" },
           ].map((s) => (
             <div key={s.label} className="bg-white/5 border border-white/10 rounded-2xl p-4 text-center">
               <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
@@ -378,12 +379,12 @@ export default function TechDashboard({
         <div className="mb-6">
           <h2 className="font-semibold mb-3 flex items-center gap-2 text-sm">
             <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-            Ανατεθειμένα ({jobs.length})
+            {t.tech_active_jobs} ({jobs.length})
           </h2>
           {jobs.length === 0 ? (
             <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center text-slate-500">
               <div className="text-3xl mb-2">😴</div>
-              <p className="text-sm">Δεν υπάρχουν ενεργά jobs</p>
+              <p className="text-sm">{t.tech_no_active_jobs}</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -433,7 +434,7 @@ export default function TechDashboard({
                           disabled={updatingId === job.id}
                           className="flex-1 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-sm font-semibold py-2.5 rounded-xl transition"
                         >
-                          {updatingId === job.id ? "..." : job.status === "ACCEPTED" ? "🚗 Εκκινώ" : (NEXT_LABEL[job.status] ?? "Επόμενο")}
+                          {updatingId === job.id ? "..." : (NEXT_LABEL[job.status] ?? t.tech_complete_btn)}
                         </button>
                       )}
                     </div>
@@ -446,7 +447,7 @@ export default function TechDashboard({
 
         {pendingJobs.length > 0 && (
           <div className="mb-6">
-            <h2 className="font-semibold mb-3 text-sm text-slate-400">Αναμονή Ανάθεσης ({pendingJobs.length})</h2>
+            <h2 className="font-semibold mb-3 text-sm text-slate-400">{t.tech_pending_jobs} ({pendingJobs.length})</h2>
             <div className="space-y-2">
               {pendingJobs.map((job) => (
                 <div key={job.id} className="bg-white/3 border border-white/5 rounded-xl p-3 flex items-center justify-between gap-2">
@@ -466,7 +467,7 @@ export default function TechDashboard({
         <div className="text-center mt-8 space-y-2">
           <p className="text-slate-700 text-xs">Τελ. ανανέωση: {lastRefresh.toLocaleTimeString("el-GR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</p>
           <button onClick={() => signOut({ callbackUrl: "/login" })} className="text-slate-600 hover:text-slate-400 text-xs transition">
-            Αποσύνδεση
+            {t.tech_logout ?? "Logout"}
           </button>
         </div>
       </div>
@@ -478,16 +479,16 @@ export default function TechDashboard({
         return (
           <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-4">
             <div className="bg-slate-900 border border-white/10 rounded-2xl p-6 w-full max-w-sm">
-              <h3 className="text-lg font-bold mb-1">Επιβεβαίωση Εκκίνησης</h3>
+              <h3 className="text-lg font-bold mb-1">{t.tech_eta_title}</h3>
               <p className="text-slate-400 text-sm mb-5">{job.customer.name} · {job.address ?? `${job.latitude.toFixed(4)}, ${job.longitude.toFixed(4)}`}</p>
               {(distKm != null || job.estimatedMinutes != null) && (
                 <div className="bg-slate-800 rounded-xl p-3 mb-5 flex gap-4 text-sm">
-                  {distKm != null && <div className="text-center flex-1"><div className="text-lg font-bold text-blue-300">{distKm.toFixed(1)} km</div><div className="text-slate-500 text-xs">Απόσταση</div></div>}
-                  {job.estimatedMinutes != null && <div className="text-center flex-1"><div className="text-lg font-bold text-slate-400">{job.estimatedMinutes} λεπτ.</div><div className="text-slate-500 text-xs">ETA admin</div></div>}
+                  {distKm != null && <div className="text-center flex-1"><div className="text-lg font-bold text-blue-300">{distKm.toFixed(1)} km</div><div className="text-slate-500 text-xs">{t.tech_distance}</div></div>}
+                  {job.estimatedMinutes != null && <div className="text-center flex-1"><div className="text-lg font-bold text-slate-400">{job.estimatedMinutes} min</div><div className="text-slate-500 text-xs">ETA</div></div>}
                 </div>
               )}
               <div className="mb-6">
-                <div className="text-xs text-slate-500 uppercase tracking-wider mb-3">Εκτίμησέ σου (λεπτά)</div>
+                <div className="text-xs text-slate-500 uppercase tracking-wider mb-3">{t.tech_eta_yours}</div>
                 <div className="flex items-center gap-3 justify-center">
                   <button onClick={() => setEtaConfirm((p) => p ? { ...p, eta: Math.max(5, p.eta - 5) } : p)}
                     className="w-12 h-12 rounded-xl bg-white/10 hover:bg-white/20 text-xl font-bold transition">−</button>
@@ -497,11 +498,11 @@ export default function TechDashboard({
                 </div>
               </div>
               <div className="flex gap-3">
-                <button onClick={() => setEtaConfirm(null)} className="flex-1 py-3 rounded-xl bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10 transition text-sm">Ακύρωση</button>
+                <button onClick={() => setEtaConfirm(null)} className="flex-1 py-3 rounded-xl bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10 transition text-sm">{t.common_cancel}</button>
                 <button onClick={() => { updateStatus(job.id, "EN_ROUTE", { estimatedMinutes: eta }); setEtaConfirm(null); }}
                   disabled={updatingId === job.id}
                   className="flex-1 py-3 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-semibold transition text-sm">
-                  🚗 Εκκινώ →
+                  🚗 {t.tech_en_route_btn} →
                 </button>
               </div>
             </div>
@@ -516,7 +517,7 @@ export default function TechDashboard({
         return (
           <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-4">
             <div className="bg-slate-900 border border-white/10 rounded-2xl p-6 w-full max-w-sm max-h-[92vh] overflow-y-auto">
-              <h3 className="text-lg font-bold mb-1">Ολοκλήρωση Εργασίας</h3>
+              <h3 className="text-lg font-bold mb-1">{t.tech_complete_title}</h3>
               <p className="text-slate-400 text-sm mb-5">
                 {SERVICE_LABELS[c.job.serviceType]} · {c.job.customer.name} · <span className="font-mono">{c.job.vehicle.licensePlate}</span>
               </p>
@@ -524,7 +525,7 @@ export default function TechDashboard({
               {/* Battery picker */}
               {isBattery && (
                 <div className="mb-5">
-                  <div className="text-xs text-slate-500 uppercase tracking-wider mb-2">Επιλογή Μπαταρίας</div>
+                  <div className="text-xs text-slate-500 uppercase tracking-wider mb-2">{t.tech_battery_label}</div>
                   <div className="grid grid-cols-3 gap-2 mb-3">
                     {BATTERY_TIERS.map((tier) => {
                       const price = (c.job.estimatedPrice ?? 49) + tier.surcharge;
@@ -549,7 +550,7 @@ export default function TechDashboard({
                     type="text"
                     value={c.batteryBrand}
                     onChange={(e) => setCompleteConfirm((p) => p ? { ...p, batteryBrand: e.target.value } : p)}
-                    placeholder="Μάρκα/Μοντέλο (προαιρ.)  π.χ. Varta Blue Dynamic"
+                    placeholder={t.tech_battery_brand_placeholder}
                     className="w-full bg-slate-800 border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-purple-500 transition"
                   />
                 </div>
@@ -557,7 +558,7 @@ export default function TechDashboard({
 
               {/* Payment method */}
               <div className="mb-5">
-                <div className="text-xs text-slate-500 uppercase tracking-wider mb-2">Τρόπος Πληρωμής</div>
+                <div className="text-xs text-slate-500 uppercase tracking-wider mb-2">{t.tech_payment_method}</div>
                 <div className="grid grid-cols-2 gap-3">
                   {(["CASH", "CARD"] as const).map((m) => (
                     <button
@@ -570,7 +571,7 @@ export default function TechDashboard({
                       }`}
                     >
                       <div className="text-2xl mb-1">{m === "CASH" ? "💵" : "💳"}</div>
-                      <div className="text-sm font-medium">{m === "CASH" ? "Μετρητά" : "Κάρτα POS"}</div>
+                      <div className="text-sm font-medium">{m === "CASH" ? t.tech_payment_cash : t.tech_payment_card}</div>
                     </button>
                   ))}
                 </div>
@@ -578,7 +579,7 @@ export default function TechDashboard({
 
               {/* Final price */}
               <div className="mb-5">
-                <div className="text-xs text-slate-500 uppercase tracking-wider mb-2">Τελική Τιμή</div>
+                <div className="text-xs text-slate-500 uppercase tracking-wider mb-2">{t.tech_final_price}</div>
                 <div className="flex items-center gap-3">
                   <input
                     type="number"
@@ -597,7 +598,7 @@ export default function TechDashboard({
                 <textarea
                   value={c.notes}
                   onChange={(e) => setCompleteConfirm((p) => p ? { ...p, notes: e.target.value } : p)}
-                  placeholder="Σημειώσεις τεχνικού (προαιρετικό)"
+                  placeholder={t.tech_notes_placeholder}
                   rows={2}
                   className="w-full bg-slate-800 border border-white/10 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:border-purple-500 transition"
                 />
@@ -606,7 +607,7 @@ export default function TechDashboard({
               <div className="flex gap-3">
                 <button onClick={() => setCompleteConfirm(null)}
                   className="flex-1 py-3 rounded-xl bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10 transition text-sm">
-                  Ακύρωση
+                  {t.common_cancel}
                 </button>
                 <button
                   disabled={!c.finalPrice || updatingId === c.job.id}
@@ -622,7 +623,7 @@ export default function TechDashboard({
                   }}
                   className="flex-1 py-3 rounded-xl bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-semibold transition text-sm"
                 >
-                  {updatingId === c.job.id ? "..." : "✅ Ολοκλήρωση"}
+                  {updatingId === c.job.id ? t.tech_completing : `✅ ${t.tech_complete_btn}`}
                 </button>
               </div>
             </div>
@@ -636,8 +637,8 @@ export default function TechDashboard({
           <div className="bg-slate-900 border border-white/10 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
             <div className="text-center mb-5">
               <div className="text-4xl mb-2">💳</div>
-              <h3 className="font-bold text-lg">Link Πληρωμής με Κάρτα</h3>
-              <p className="text-slate-400 text-sm mt-1">Στείλτε αυτό το link στον πελάτη για να πληρώσει</p>
+              <h3 className="font-bold text-lg">{t.tech_payment_link_title}</h3>
+              <p className="text-slate-400 text-sm mt-1">{t.tech_payment_link_desc}</p>
             </div>
 
             <div className="bg-slate-800 border border-white/10 rounded-xl p-3 mb-4">
@@ -653,21 +654,21 @@ export default function TechDashboard({
                 }}
                 className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition"
               >
-                {linkCopied ? "✓ Αντιγράφηκε!" : "📋 Αντιγραφή Link"}
+                {linkCopied ? `✓ ${t.common_copied}` : `📋 ${t.common_copy}`}
               </button>
               <a
-                href={`https://wa.me/?text=${encodeURIComponent("Πληρωμή υπηρεσίας: " + paymentLink)}`}
+                href={`https://wa.me/?text=${encodeURIComponent(`${t.tech_payment_link_title}: ` + paymentLink)}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-full py-3 rounded-xl bg-green-600/30 border border-green-500/40 hover:bg-green-600/40 text-green-300 font-semibold text-sm flex items-center justify-center gap-2 transition"
               >
-                <span>📱</span> Αποστολή μέσω WhatsApp
+                <span>📱</span> {t.common_share_whatsapp}
               </a>
               <button
                 onClick={() => setPaymentLink(null)}
                 className="w-full py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 text-sm transition"
               >
-                Κλείσιμο
+                {t.common_close}
               </button>
             </div>
           </div>
